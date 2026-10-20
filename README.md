@@ -4,7 +4,7 @@
 
 GPU kernels written from scratch and benchmarked against PyTorch, then used to speed up a simulated robot. Built to run on a free shared GPU, so it costs nothing.
 
-Status: early. The Triton matmul and softmax kernels are **correct** (checked against PyTorch on a Colab T4) but the first matmul is **far slower than `torch.matmul`**. Tuning it is stage 1, step 3. Measurements are below.
+Status: early. The Triton matmul and softmax kernels are **correct** (checked against PyTorch on a Colab T4). The first matmul reached about 4% of `torch.matmul`; a sweep of 135 settings raised it to **about 16%** (3.1 times faster than the default). v2, built from those findings, has not been run yet. Measurements are below.
 
 See [docs/PLAN.md](docs/PLAN.md) for the stages, the rules for what can be claimed, and the risks.
 
@@ -65,3 +65,28 @@ Measured on a Tesla T4 on Google Colab, 2026-10-20, with `python scripts/bench_m
 Correctness: `scripts/check_kernels.py` passed for all 4 matmul shapes (largest error 0.0625 in float16) and all 3 softmax shapes.
 
 What this says: the kernel gives the right answers, but at large sizes it reaches only about 4% of PyTorch's speed, so its work is not using the GPU well yet. The first version uses one fixed tile size and the default launch settings. Next: try larger tiles, more warps and pipeline stages, measure each change on its own, and record what helps.
+
+### Tuning sweep (v1 kernel, 2048 x 2048, float16)
+
+Measured on a Tesla T4 on Google Colab, 2026-10-20, with `python scripts/tune_matmul.py --size 2048` (torch 2.11.0, triton 3.6.0, CUDA 13.0). It tried 135 combinations of tile size, K-tile, warps and pipeline stages. All 135 compiled and gave correct answers. `torch.matmul` ran at about 18,500 GFLOPS in the same run.
+
+| Setting (tile MxNxK, warps, stages) | GFLOPS | vs torch |
+|---|---|---|
+| 64x64x32, 4 warps, 3 stages (v1 default) | 979 | 5% |
+| 64x64x16, 4 warps, 4 stages (best) | 3,045 | 16% |
+| 64x64x16, 4 warps, 2 stages | 3,036 | 16% |
+| 64x64x16, 4 warps, 3 stages | 3,035 | 16% |
+| 64x128x16, 8 warps, 4 stages | 2,892 | 16% |
+| 64x128x16, 8 warps, 2 stages | 2,886 | 16% |
+
+What the sweep showed:
+- Halving the K-tile from 32 to 16 (same tile and warps) made the kernel about 3.1 times faster. The reason is not established yet: `scripts/inspect_kernel.py` prints register use and spills to investigate it.
+- The number of pipeline stages hardly mattered (3,045, 3,036 and 3,035 GFLOPS). A possible explanation is that the T4's generation of GPU lacks the hardware support those stages rely on, but that is a hypothesis, not a finding.
+- Some settings were very slow: 2 warps with 64x64 tiles ran 10 to 100 times slower than 4 warps.
+
+Raw numbers for the rows above: [results/tuning_top5_t4_2048_2026-10-20.csv](results/tuning_top5_t4_2048_2026-10-20.csv). The full 135-row file is not in the repo yet.
+
+### Still unmeasured
+
+- v2 (autotuning plus grouped launch order) and `v1 with the best swept settings` are in the benchmark script but have not been run.
+- Whether the grouped launch order helps is not known. It is combined with autotuning in v2, so isolating it needs another experiment.

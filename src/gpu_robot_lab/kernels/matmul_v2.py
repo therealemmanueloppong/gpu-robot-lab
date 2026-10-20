@@ -1,6 +1,6 @@
 """Matmul v2 in Triton: automatic tuning plus a cache-friendly launch order.
 
-Not yet run on a GPU. Run ``scripts/check_kernels.py`` and ``scripts/bench_matmul.py`` on a Colab GPU.
+Not yet run on a GPU (the settings above come from the v1 sweep). Run ``scripts/check_kernels.py`` and ``scripts/bench_matmul.py`` on a Colab GPU.
 
 Two changes from v1:
 1. ``triton.autotune`` tries several tile sizes, warp counts and pipeline depths the first time it
@@ -15,13 +15,14 @@ import triton
 import triton.language as tl
 
 _CONFIGS = [
-    triton.Config({"BLOCK_M": 128, "BLOCK_N": 128, "BLOCK_K": 32, "GROUP_M": 8}, num_stages=2, num_warps=8),
-    triton.Config({"BLOCK_M": 128, "BLOCK_N": 64, "BLOCK_K": 32, "GROUP_M": 8}, num_stages=3, num_warps=4),
-    triton.Config({"BLOCK_M": 64, "BLOCK_N": 128, "BLOCK_K": 32, "GROUP_M": 8}, num_stages=3, num_warps=4),
-    triton.Config({"BLOCK_M": 64, "BLOCK_N": 64, "BLOCK_K": 32, "GROUP_M": 8}, num_stages=4, num_warps=4),
-    triton.Config({"BLOCK_M": 128, "BLOCK_N": 64, "BLOCK_K": 64, "GROUP_M": 8}, num_stages=2, num_warps=4),
-    triton.Config({"BLOCK_M": 64, "BLOCK_N": 64, "BLOCK_K": 64, "GROUP_M": 8}, num_stages=3, num_warps=4),
-    triton.Config({"BLOCK_M": 32, "BLOCK_N": 64, "BLOCK_K": 32, "GROUP_M": 8}, num_stages=4, num_warps=2),
+    # Chosen from the 2026-10-20 sweep on a T4: a K-tile of 16 beat 32 and 64, and 64x64 tiles with
+    # 4 warps was best. num_stages made almost no difference there, so it stays at 3.
+    triton.Config({"BLOCK_M": 64, "BLOCK_N": 64, "BLOCK_K": 16, "GROUP_M": 8}, num_stages=3, num_warps=4),
+    triton.Config({"BLOCK_M": 64, "BLOCK_N": 128, "BLOCK_K": 16, "GROUP_M": 8}, num_stages=3, num_warps=8),
+    triton.Config({"BLOCK_M": 128, "BLOCK_N": 64, "BLOCK_K": 16, "GROUP_M": 8}, num_stages=3, num_warps=8),
+    triton.Config({"BLOCK_M": 128, "BLOCK_N": 128, "BLOCK_K": 16, "GROUP_M": 8}, num_stages=3, num_warps=8),
+    triton.Config({"BLOCK_M": 64, "BLOCK_N": 64, "BLOCK_K": 32, "GROUP_M": 8}, num_stages=3, num_warps=8),
+    triton.Config({"BLOCK_M": 32, "BLOCK_N": 32, "BLOCK_K": 32, "GROUP_M": 8}, num_stages=3, num_warps=4),
 ]
 
 

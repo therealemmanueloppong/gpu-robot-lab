@@ -17,11 +17,14 @@ def main(path: str) -> int:
     sizes = [int(r["size"]) for r in rows]
     torch_g = [float(r["torch_gflops"]) for r in rows]
     triton_g = [float(r["triton_gflops"]) for r in rows]
+    tuned_g = [float(r["v1_tuned_gflops"]) for r in rows] if "v1_tuned_gflops" in rows[0] else None
     v2_g = [float(r["v2_gflops"]) for r in rows] if "v2_gflops" in rows[0] else None
 
     fig, ax = plt.subplots(figsize=(7, 4.2), dpi=150)
     ax.plot(sizes, torch_g, marker="o", linewidth=2, color="#2a7ae2", label="torch.matmul")
     ax.plot(sizes, triton_g, marker="o", linewidth=2, color="#d9534f", label="Triton v1 (untuned)")
+    if tuned_g:
+        ax.plot(sizes, tuned_g, marker="o", linewidth=2, color="#e08a1e", label="Triton v1, best swept settings")
     if v2_g:
         ax.plot(sizes, v2_g, marker="o", linewidth=2, color="#2e9e6b", label="Triton v2 (autotuned)")
         for x, t, y in zip(sizes, torch_g, v2_g):

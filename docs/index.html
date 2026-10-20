@@ -49,7 +49,7 @@
 </head>
 <body>
 <main>
-  <p><span class="chip">Early stage: kernels are correct, speed tuning is next</span></p>
+  <p><span class="chip">Early stage: kernels are correct, tuning raised v1 from 4% to 16% of PyTorch</span></p>
   <h1>GPU Robot Lab</h1>
   <p class="muted">GPU kernels written from scratch and benchmarked against PyTorch, then used to speed up a simulated robot. This page explains the first kernel, a tiled matrix multiply, and shows what has been measured so far. <a href="https://github.com/therealemmanueloppong/gpu-robot-lab">Code on GitHub</a>.</p>
 
@@ -101,11 +101,16 @@
   <div class="card">
     <svg id="chart" viewBox="0 0 720 340" role="img" aria-label="Line chart of throughput versus matrix size for torch.matmul and the first Triton kernel"></svg>
     <table id="table"></table>
-    <p class="muted" style="font-size:14px">The first kernel uses one fixed tile size and default launch settings, and it reaches about 4 percent of PyTorch's speed at 4096. Next is a sweep of tile sizes, warps and pipeline stages, one change at a time, with each result recorded in the repo.</p>
+
+    <h3 style="font-size:17px;margin:24px 0 4px">After tuning: 135 settings tried</h3>
+    <p class="muted" style="font-size:15px;margin-top:0">Tesla T4, 2048 x 2048, float16, 2026-10-20. Every setting gave correct answers.</p>
+    <svg id="tune" viewBox="0 0 720 230" role="img" aria-label="Bar chart comparing the default setting, the best tuned setting and torch.matmul"></svg>
+    <p class="muted" style="font-size:14px">Changing only the K-tile from 32 to 16 made the kernel about 3.1 times faster. Pipeline stages hardly mattered (3,045, 3,036 and 3,035 GFLOPS). PyTorch is still about 6 times faster, so there is a lot left to explain and close.</p>
+    <p class="muted" style="font-size:14px">The first kernel uses one fixed tile size and default launch settings, and it reaches about 4 percent of PyTorch's speed at 4096.</p>
   </div>
 
   <h2>4. What is next</h2>
-  <p>Version 2 of the kernel (automatic tuning plus the grouped launch order above) is written and waiting for its first GPU run. Then plot the climb from 4 percent toward PyTorch, and report what actually helped. Then train a simulated robot on a GPU simulator and compare simulation speed on the CPU and GPU. Everything here runs on a free shared GPU. <a href="https://colab.research.google.com/github/therealemmanueloppong/gpu-robot-lab/blob/main/notebooks/colab_quickstart.ipynb">Run it yourself in Colab</a>.</p>
+  <p>Version 2 of the kernel (automatic tuning built from these findings, plus the grouped launch order above) is written and waiting for its first GPU run. Then find out why a K-tile of 16 is so much faster, and report what actually helps. Then train a simulated robot on a GPU simulator and compare simulation speed on the CPU and GPU. Everything here runs on a free shared GPU. <a href="https://colab.research.google.com/github/therealemmanueloppong/gpu-robot-lab/blob/main/notebooks/colab_quickstart.ipynb">Run it yourself in Colab</a>.</p>
 </main>
 
 <script>
@@ -259,6 +264,21 @@
   line('torch', 'var(--a)'); line('triton', 'var(--bad)');
   var l1 = el('text', { x: R - 4, y: Y(22456) - 10, 'class': 'tick', 'text-anchor': 'end', fill: 'var(--a)' }, ch); l1.textContent = 'torch.matmul';
   var l2 = el('text', { x: R - 4, y: Y(920) - 12, 'class': 'tick', 'text-anchor': 'end', fill: 'var(--bad)' }, ch); l2.textContent = 'Triton v1 (untuned)';
+  /* tuning bars, from the 2026-10-20 sweep output */
+  var bars = [
+    { name: 'torch.matmul', v: 18505, c: 'var(--a)' },
+    { name: 'Tuned: 64x64x16, 4 warps', v: 3045.2, c: 'var(--b)' },
+    { name: 'Default v1: 64x64x32, 4 warps', v: 978.5, c: 'var(--bad)' }
+  ];
+  var tu = $('tune'), TL = 230, TR = 540, scale = (TR - TL) / 20000;
+  bars.forEach(function (b, i) {
+    var y = 20 + i * 62;
+    var t = el('text', { x: TL - 10, y: y + 22, 'class': 'tick', 'text-anchor': 'end' }, tu); t.textContent = b.name;
+    el('rect', { x: TL, y: y, width: b.v * scale, height: 34, rx: 4, fill: b.c }, tu);
+    var v = el('text', { x: TL + b.v * scale + 8, y: y + 22, 'class': 'tick' }, tu);
+    v.textContent = Math.round(b.v).toLocaleString('en-US') + ' GFLOPS (' + Math.round(b.v / 18505 * 100) + '%)';
+  });
+
   var rows = '<tr><th>Size</th><th>torch (GFLOPS)</th><th>Triton v1 (GFLOPS)</th><th>Triton vs torch</th></tr>';
   data.forEach(function (d) { rows += '<tr><td>' + d.n + '</td><td>' + fmt(d.torch) + '</td><td>' + fmt(d.triton) + '</td><td>' + Math.round(d.triton / d.torch * 100) + '%</td></tr>'; });
   $('table').innerHTML = rows;
