@@ -1,6 +1,6 @@
 # GPU Robot Lab
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/therealemmanueloppong/gpu-robot-lab/blob/main/notebooks/colab_quickstart.ipynb)
+[**Live explainer**](https://therealemmanueloppong.github.io/gpu-robot-lab/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/therealemmanueloppong/gpu-robot-lab/blob/main/notebooks/colab_quickstart.ipynb)
 
 GPU kernels written from scratch and benchmarked against PyTorch, then used to speed up a simulated robot. Built to run on a free shared GPU, so it costs nothing.
 
@@ -10,7 +10,7 @@ See [docs/PLAN.md](docs/PLAN.md) for the stages, the rules for what can be claim
 
 ## See it
 
-- **Interactive explainer**: `docs/index.html` animates how the tiled kernel loads tiles and why it reads about 64 times less memory than a naive multiply. It also shows the measured results. (Open the file in a browser, or use the GitHub Pages link once it is enabled.)
+- **[Interactive explainer (live page)](https://therealemmanueloppong.github.io/gpu-robot-lab/)**: animates how the tiled kernel loads tiles and why it reads about 64 times less memory than a naive multiply, and shows the measured results. The source is `docs/index.html`.
 - **Results chart**: below, from real runs on a Colab T4.
 - **Tuning study**: `scripts/tune_matmul.py` sweeps tile sizes, warps and pipeline stages. Its chart goes here once it has been run.
 
