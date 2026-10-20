@@ -118,8 +118,15 @@
     <p class="muted" style="font-size:14px">Registers and spills come from the compiler for each setting. Speeds come from the 135-setting sweep (torch.matmul ran at 18,505 GFLOPS in that run). The link between spills and speed is a strong pattern, not a controlled proof. Pipeline stages hardly mattered (3,045, 3,036 and 3,035 GFLOPS).</p>
   </div>
 
-  <h2>4. What is next</h2>
-  <p>Find out which part of v2 helps (the tile settings or the grouped launch order) by changing one at a time, repeat the measurements to see how much they vary, and close more of the gap to PyTorch. Then train a simulated robot on a GPU simulator. Everything here runs on a free shared GPU. <a href="https://colab.research.google.com/github/therealemmanueloppong/gpu-robot-lab/blob/main/notebooks/colab_quickstart.ipynb">Run it yourself in Colab</a>.</p>
+  <h2>4. A robot, simulated in parallel</h2>
+  <p>The same idea of doing many things at once applies to robots. The pendulum below has a motor too weak to lift it, so it must swing back and forth to reach the top. A planner tries thousands of motor plans at the same time in a simulator, keeps the best, and repeats. The final plan is then replayed in a separate simulator as a check.</p>
+  <div class="card" style="text-align:center">
+    <img src="swingup_cpu_preview.gif" alt="A pendulum swinging back and forth until it reaches the top" width="288" height="288" style="max-width:100%;height:auto">
+    <p class="muted" style="font-size:14px;text-align:left">This preview was planned from 1,024 parallel simulations on a laptop CPU in 2.8 seconds. The replay in plain MuJoCo ended 0.498 m above the hinge, where the top is 0.5 m. It has not been run on a GPU yet, so there is no GPU speed-up to claim.</p>
+  </div>
+
+  <h2>5. What is next</h2>
+  <p>Find out which part of v2 helps (the tile settings or the grouped launch order) by changing one at a time, repeat the measurements to see how much they vary, and close more of the gap to PyTorch. Then run the robot simulation on a GPU and measure how much faster many simulated robots run than one CPU thread. Everything here runs on a free shared GPU. <a href="https://colab.research.google.com/github/therealemmanueloppong/gpu-robot-lab/blob/main/notebooks/colab_quickstart.ipynb">Run it yourself in Colab</a>.</p>
 </main>
 
 <script>

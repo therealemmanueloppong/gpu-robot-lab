@@ -2,9 +2,11 @@
 
 [**Live explainer**](https://therealemmanueloppong.github.io/gpu-robot-lab/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/therealemmanueloppong/gpu-robot-lab/blob/main/notebooks/colab_quickstart.ipynb)
 
+[![Open stage 2 in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/therealemmanueloppong/gpu-robot-lab/blob/main/notebooks/robot_sim_colab.ipynb) (robot simulation)
+
 GPU kernels written from scratch and benchmarked against PyTorch, then used to speed up a simulated robot. Built to run on a free shared GPU, so it costs nothing.
 
-Status: early but measured. The Triton matmul and softmax kernels are **correct** (checked against PyTorch on a Colab T4). The first matmul reached about 4% of `torch.matmul`. A sweep of 135 settings and a compiler check found that it was **spilling registers**, and tuned versions run about **3.4 times faster** (v2: 11 to 17% of PyTorch at large sizes). The remaining gap to PyTorch is open work. Measurements are below.
+Status: early but measured. The Triton matmul and softmax kernels are **correct** (checked against PyTorch on a Colab T4). The first matmul reached about 4% of `torch.matmul`. A sweep of 135 settings and a compiler check found that it was **spilling registers**, and tuned versions run about **3.4 times faster** (v2: 11 to 17% of PyTorch at large sizes). The remaining gap to PyTorch is open work. Stage 2 (a simulated robot planned with thousands of parallel simulations) is built and verified on a CPU; its GPU speed numbers have not been measured yet. Measurements are below.
 
 See [docs/PLAN.md](docs/PLAN.md) for the stages, the rules for what can be claimed, and the risks.
 
@@ -12,6 +14,10 @@ See [docs/PLAN.md](docs/PLAN.md) for the stages, the rules for what can be claim
 
 - **[Interactive explainer (live page)](https://therealemmanueloppong.github.io/gpu-robot-lab/)**: animates how the tiled kernel loads tiles and why it reads about 64 times less memory than a naive multiply, and shows the measured results. The source is `docs/index.html`.
 - **Results chart**: below, from real runs on a Colab T4.
+- **Robot simulation (stage 2)**: a pendulum whose motor is too weak to lift it directly. Thousands of candidate motor plans are simulated at once (MuJoCo MJX), the best are kept, and the swing-up is replayed in a separate CPU simulator as a check. Preview below, run on a laptop CPU:
+
+  ![Pendulum swinging up to the top](results/cpu_preview/swingup.gif)
+
 - **v2 kernel**: autotuning plus grouped launch order. `scripts/check_kernels.py` and `scripts/bench_matmul.py` now check and time v1, v2 and `torch.matmul` together, so one Colab run produces the comparison.
 - **Tuning study and diagnosis**: `scripts/tune_matmul.py` sweeps tile sizes, warps and pipeline stages, and `scripts/inspect_kernel.py` prints register use and spills. Results below.
 
@@ -25,6 +31,8 @@ See [docs/PLAN.md](docs/PLAN.md) for the stages, the rules for what can be claim
 - `scripts/bench_matmul.py` times the Triton matmul against `torch.matmul` and writes a CSV
 - `scripts/tune_matmul.py` and `scripts/plot_tuning.py` sweep launch settings and chart the best ones (GPU needed)
 - `scripts/plot_results.py` draws a results chart from a CSV
+- `src/gpu_robot_lab/sim.py` and `viz.py` the simulated pendulum, the parallel planner (cross-entropy method over MJX) and the GIF drawing (needs the `sim` and `plot` extras)
+- `scripts/run_swingup.py` plans and replays a swing-up, `scripts/bench_sim.py` compares CPU and parallel simulation speed, `notebooks/robot_sim_colab.ipynb` runs both on a Colab GPU
 - `docs/index.html` the interactive explainer
 - `notebooks/colab_quickstart.ipynb` runs all of the above on a free Colab GPU
 
@@ -101,9 +109,16 @@ Pipeline stages hardly mattered (3,045, 3,036 and 3,035 GFLOPS). One possible re
 
 Before tuning, v1 reached 4 to 34% of PyTorch depending on size ([results/matmul_t4_2026-10-20.csv](results/matmul_t4_2026-10-20.csv), [chart](results/matmul_t4_2026-10-20.png)).
 
+### 4. Robot simulation (CPU preview only)
+
+Run on a laptop CPU (no GPU), 2026-10-20, `python scripts/run_swingup.py --batch 1024 --iterations 15` ([results/cpu_preview/swingup.json](results/cpu_preview/swingup.json)): the planner found a swing-up in 2.8 seconds. A separate replay in plain MuJoCo ended with the pole tip 0.498 m above the hinge, where the top is 0.5 m. Tests also check that the MJX simulator and plain MuJoCo agree to within 0.0001 radians over 200 steps, and that the motor alone cannot lift the pole.
+
+This is a CPU run. It shows the method works. It does not show GPU speed-ups, which need the Colab notebook (`notebooks/robot_sim_colab.ipynb`) to be run.
+
 ### Not yet measured
 
 - Which part of v2 helps: the tile settings, or the grouped launch order. That needs one change at a time.
 - How much the results vary: each number above is from one run.
 - Why `torch.matmul` is still about 6 to 9 times faster at large sizes.
-- The robot simulation (stage 2 of [docs/PLAN.md](docs/PLAN.md)) is not built.
+- The GPU speed of the robot simulation (batch sizes up to 16,384 against one CPU thread), and the swing-up planned on a GPU. Both are in the stage 2 notebook and have not been run.
+- A learned control policy for the robot. Stage 2 uses planning, not reinforcement learning.

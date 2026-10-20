@@ -13,6 +13,7 @@ dependencies = ["numpy>=1.26"]
 # Google Colab already has torch and triton installed, so you usually do not need this extra there.
 gpu = ["torch", "triton"]
 plot = ["matplotlib"]
+sim = ["mujoco", "mujoco-mjx", "jax"]
 dev = ["pytest>=8", "ruff>=0.5"]
 
 [tool.setuptools.packages.find]
