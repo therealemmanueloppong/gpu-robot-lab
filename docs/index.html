@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPU Robot Lab: how a tiled GPU kernel works</title>
+<style>
+  :root { --bg:#fbfbfa; --fg:#1d1d1b; --muted:#5f5e5a; --card:#ffffff; --line:#d7d5cc; --a:#2a7ae2; --b:#2e9e6b; --c:#e08a1e; --done:#f3d9ae; --bad:#d9534f; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161615; --fg:#ecebe6; --muted:#a8a69d; --card:#1f1f1d; --line:#3a3936; --a:#6aa6f5; --b:#5cc596; --c:#f0a43d; --done:#4a3a1c; --bad:#ee7b77; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.65 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  main { max-width: 880px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 28px; margin: 8px 0 4px; }
+  h2 { font-size: 20px; margin: 40px 0 8px; }
+  p { margin: 8px 0; }
+  .muted { color: var(--muted); }
+  .chip { display:inline-block; padding:2px 10px; border:1px solid var(--line); border-radius:999px; font-size:13px; color:var(--muted); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-top:12px; }
+  .controls { display:flex; flex-wrap:wrap; gap:12px 16px; align-items:center; margin-bottom:12px; }
+  label { font-size:14px; color:var(--muted); display:flex; gap:6px; align-items:center; }
+  select, button, input[type=range] { font:inherit; }
+  button, select { background:var(--card); color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:6px 12px; cursor:pointer; }
+  button:hover { border-color: var(--muted); }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline:2px solid var(--a); outline-offset:2px; }
+  svg { width:100%; height:auto; display:block; }
+  .cell { fill: var(--card); stroke: var(--line); stroke-width:1; }
+  .cell.done { fill: var(--done); }
+  .cell.tc { fill: var(--c); }
+  .cell.ta { fill: var(--a); }
+  .cell.tb { fill: var(--b); }
+  .mat-label { font-size:14px; fill: var(--fg); text-anchor: middle; }
+  .legend { display:flex; gap:16px; flex-wrap:wrap; font-size:14px; margin-top:8px; }
+  .sw { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+  .status { font-size:15px; min-height:3.2em; margin-top:8px; }
+  .stats { display:grid; grid-template-columns: repeat(auto-fit, minmax(190px,1fr)); gap:12px; margin-top:12px; }
+  .stat { border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+  .stat b { display:block; font-size:22px; }
+  .bar { height:12px; border-radius:6px; background:var(--line); margin-top:6px; overflow:hidden; }
+  .bar > i { display:block; height:100%; background:var(--c); }
+  table { border-collapse:collapse; width:100%; font-size:15px; margin-top:8px; }
+  th, td { text-align:right; padding:6px 10px; border-bottom:1px solid var(--line); }
+  th:first-child, td:first-child { text-align:left; }
+  .axis { stroke: var(--line); } .tick { font-size:12px; fill: var(--muted); }
+  a { color: var(--a); }
+</style>
+</head>
+<body>
+<main>
+  <p><span class="chip">Early stage: kernels are correct, speed tuning is next</span></p>
+  <h1>GPU Robot Lab</h1>
+  <p class="muted">GPU kernels written from scratch and benchmarked against PyTorch, then used to speed up a simulated robot. This page explains the first kernel, a tiled matrix multiply, and shows what has been measured so far. <a href="https://github.com/therealemmanueloppong/gpu-robot-lab">Code on GitHub</a>.</p>
+
+  <h2>1. Why a GPU kernel works on tiles</h2>
+  <p>Multiplying two matrices means every output number needs a whole row of A and a whole column of B. Read naively, the same numbers get fetched from slow memory over and over. A tiled kernel gives each GPU program one small block of the output, then walks along K loading one tile of A and one tile of B at a time, so each loaded number is reused for a whole block of results.</p>
+
+  <div class="card">
+    <div class="controls">
+      <label>Matrix size <select id="n"><option>8</option><option>16</option></select></label>
+      <label>Tile size <select id="t"><option>2</option><option selected>4</option><option>8</option></select></label>
+      <label>Speed <input id="speed" type="range" min="1" max="10" value="5" aria-label="Animation speed"></label>
+      <button id="play" type="button">Play</button>
+      <button id="step" type="button">Step</button>
+      <button id="reset" type="button">Reset</button>
+    </div>
+    <svg id="viz" role="img" aria-label="Three matrices A, B and C with the current tiles highlighted"></svg>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--c)"></i>output tile being built (C)</span>
+      <span><i class="sw" style="background:var(--a)"></i>tile of A loaded this step</span>
+      <span><i class="sw" style="background:var(--b)"></i>tile of B loaded this step</span>
+      <span><i class="sw" style="background:var(--done)"></i>output tile finished</span>
+    </div>
+    <p class="status" id="status" aria-live="polite"></p>
+    <div class="stats">
+      <div class="stat">Elements read without tiling<b id="naive">0</b></div>
+      <div class="stat">Elements read with tiling<b id="tiled">0</b><div class="bar"><i id="tiledbar" style="width:0%"></i></div></div>
+      <div class="stat">Reduction<b id="ratio">0x</b></div>
+    </div>
+    <p class="muted" style="font-size:14px">Reduction = 2 x BM x BN / (BM + BN). The real kernel uses 64 x 64 tiles, which gives <b id="real">64</b>x fewer reads. The same formula is checked by a test in the repo (<code>tests/test_tiling.py</code>).</p>
+  </div>
+
+  <h2>2. What has been measured</h2>
+  <p>First version of the kernel, 16-bit numbers, on a free Tesla T4 on Google Colab (2026-10-20). The answers match PyTorch, but the speed does not yet.</p>
+  <div class="card">
+    <svg id="chart" viewBox="0 0 720 340" role="img" aria-label="Line chart of throughput versus matrix size for torch.matmul and the first Triton kernel"></svg>
+    <table id="table"></table>
+    <p class="muted" style="font-size:14px">The first kernel uses one fixed tile size and default launch settings, and it reaches about 4 percent of PyTorch's speed at 4096. Next is a sweep of tile sizes, warps and pipeline stages, one change at a time, with each result recorded in the repo.</p>
+  </div>
+
+  <h2>3. What is next</h2>
+  <p>Tune the kernel and plot the climb from 4 percent toward PyTorch. Then train a simulated robot on a GPU simulator and compare simulation speed on the CPU and GPU. Everything here runs on a free shared GPU. <a href="https://colab.research.google.com/github/therealemmanueloppong/gpu-robot-lab/blob/main/notebooks/colab_quickstart.ipynb">Run it yourself in Colab</a>.</p>
+</main>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var NS = 'http://www.w3.org/2000/svg';
+  var N, T, tiles, steps, cur = -1, timer = null, cells = {};
+
+  function el(name, attrs, parent) {
+    var e = document.createElementNS(NS, name);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function fmt(x) { return x.toLocaleString('en-US'); }
+
+  function build() {
+    N = parseInt($('n').value, 10);
+    T = Math.min(parseInt($('t').value, 10), N);
+    tiles = N / T;
+    steps = tiles * tiles * tiles;
+    cur = -1;
+    stop();
+    var svg = $('viz');
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var cell = N === 8 ? 26 : 14, gap = 56, pad = 8;
+    var w = N * cell, total = 3 * w + 2 * gap + 2 * pad;
+    svg.setAttribute('viewBox', '0 0 ' + total + ' ' + (w + 2 * pad + 28));
+    cells = { A: [], B: [], C: [] };
+    ['A', 'B', 'C'].forEach(function (name, mi) {
+      var x0 = pad + mi * (w + gap);
+      var t = el('text', { x: x0 + w / 2, y: pad + 14, 'class': 'mat-label' }, svg);
+      t.textContent = name;
+      if (mi === 0) { var tm = el('text', { x: x0 + w + gap / 2, y: pad + 28 + w / 2 + 6, 'class': 'mat-label' }, svg); tm.textContent = 'x'; }
+      if (mi === 1) { var te = el('text', { x: x0 + w + gap / 2, y: pad + 28 + w / 2 + 6, 'class': 'mat-label' }, svg); te.textContent = '='; }
+      for (var r = 0; r < N; r++) {
+        cells[name][r] = [];
+        for (var c = 0; c < N; c++) {
+          cells[name][r][c] = el('rect', { x: x0 + c * cell, y: pad + 28 + r * cell, width: cell, height: cell, 'class': 'cell' }, svg);
+        }
+      }
+    });
+    paint();
+  }
+
+  function info(i) {
+    var perTile = tiles, ks = i % perTile, tj = Math.floor(i / perTile) % tiles, ti = Math.floor(i / (perTile * tiles));
+    return { ti: ti, tj: tj, ks: ks };
+  }
+
+  function paint() {
+    for (var r = 0; r < N; r++) for (var c = 0; c < N; c++) {
+      cells.A[r][c].setAttribute('class', 'cell');
+      cells.B[r][c].setAttribute('class', 'cell');
+      var done = false;
+      var tr = Math.floor(r / T), tc = Math.floor(c / T);
+      if (cur >= 0) {
+        var order = (tr * tiles + tc) * tiles;
+        done = cur >= order + tiles - 1;
+      }
+      cells.C[r][c].setAttribute('class', 'cell' + (done ? ' done' : ''));
+    }
+    var s = $('status');
+    var loadsTiled = 0;
+    if (cur >= 0) {
+      var p = info(cur);
+      for (var r2 = p.ti * T; r2 < (p.ti + 1) * T; r2++) for (var c2 = p.tj * T; c2 < (p.tj + 1) * T; c2++) cells.C[r2][c2].setAttribute('class', 'cell tc');
+      for (var a = p.ti * T; a < (p.ti + 1) * T; a++) for (var k = p.ks * T; k < (p.ks + 1) * T; k++) cells.A[a][k].setAttribute('class', 'cell ta');
+      for (var k2 = p.ks * T; k2 < (p.ks + 1) * T; k2++) for (var b = p.tj * T; b < (p.tj + 1) * T; b++) cells.B[k2][b].setAttribute('class', 'cell tb');
+      s.textContent = 'Program (' + p.ti + ', ' + p.tj + '), step ' + (p.ks + 1) + ' of ' + tiles + ': load a ' + T + 'x' + T + ' tile of A and a ' + T + 'x' + T +
+        ' tile of B, multiply them, and add the result into the ' + T + 'x' + T + ' output tile. Every number loaded is used ' + T + ' times.';
+      loadsTiled = (cur + 1) * 2 * T * T;
+    } else {
+      s.textContent = 'Press Play or Step. Each step loads one tile of A and one tile of B for one output tile.';
+    }
+    var naiveTotal = 2 * N * N * N, tiledTotal = steps * 2 * T * T;
+    $('naive').textContent = fmt(naiveTotal);
+    $('tiled').textContent = fmt(tiledTotal) + (cur >= 0 && cur < steps - 1 ? '  (' + fmt(loadsTiled) + ' so far)' : '');
+    $('tiledbar').style.width = (100 * tiledTotal / naiveTotal) + '%';
+    $('ratio').textContent = (naiveTotal / tiledTotal).toFixed(1).replace(/\.0$/, '') + 'x';
+  }
+
+  function step() { cur = (cur + 1) % steps; if (cur === 0) { /* looped */ } paint(); if (cur === steps - 1) stop(); }
+  function stop() { if (timer) { clearInterval(timer); timer = null; } $('play').textContent = 'Play'; }
+  function play() {
+    if (timer) { stop(); return; }
+    if (cur >= steps - 1) cur = -1;
+    $('play').textContent = 'Pause';
+    timer = setInterval(step, 1100 - parseInt($('speed').value, 10) * 100);
+  }
+  $('play').onclick = play;
+  $('step').onclick = function () { stop(); step(); };
+  $('reset').onclick = function () { cur = -1; stop(); paint(); };
+  $('n').onchange = build; $('t').onchange = build;
+  $('speed').oninput = function () { if (timer) { stop(); play(); } };
+  $('real').textContent = (2 * 64 * 64 / (64 + 64)).toString();
+  build();
+
+  /* measured data, from results/matmul_t4_2026-10-20.csv */
+  var data = [
+    { n: 256, torch: 790.5, triton: 267.2 }, { n: 512, torch: 4784.3, triton: 753.3 },
+    { n: 1024, torch: 12869.5, triton: 983.3 }, { n: 2048, torch: 17606.1, triton: 939.4 },
+    { n: 4096, torch: 22456.0, triton: 920.4 }
+  ];
+  var ch = $('chart'), L = 70, R = 700, Tp = 20, B = 290, ymax = 24000;
+  function X(i) { return L + i * (R - L) / (data.length - 1); }
+  function Y(v) { return B - v / ymax * (B - Tp); }
+  [0, 6000, 12000, 18000, 24000].forEach(function (v) {
+    el('line', { x1: L, x2: R, y1: Y(v), y2: Y(v), 'class': 'axis' }, ch);
+    var t = el('text', { x: L - 8, y: Y(v) + 4, 'class': 'tick', 'text-anchor': 'end' }, ch); t.textContent = fmt(v);
+  });
+  data.forEach(function (d, i) { var t = el('text', { x: X(i), y: B + 18, 'class': 'tick', 'text-anchor': 'middle' }, ch); t.textContent = d.n; });
+  var xl = el('text', { x: (L + R) / 2, y: B + 38, 'class': 'tick', 'text-anchor': 'middle' }, ch); xl.textContent = 'Matrix size (N x N)';
+  var yl = el('text', { x: 12, y: (Tp + B) / 2, 'class': 'tick', 'text-anchor': 'middle', transform: 'rotate(-90 12 ' + (Tp + B) / 2 + ')' }, ch); yl.textContent = 'GFLOPS (higher is better)';
+  function line(key, color) {
+    el('polyline', { points: data.map(function (d, i) { return X(i) + ',' + Y(d[key]); }).join(' '), fill: 'none', stroke: color, 'stroke-width': 2.5 }, ch);
+    data.forEach(function (d, i) { el('circle', { cx: X(i), cy: Y(d[key]), r: 4, fill: color }, ch); });
+  }
+  line('torch', 'var(--a)'); line('triton', 'var(--bad)');
+  var l1 = el('text', { x: R - 4, y: Y(22456) - 10, 'class': 'tick', 'text-anchor': 'end', fill: 'var(--a)' }, ch); l1.textContent = 'torch.matmul';
+  var l2 = el('text', { x: R - 4, y: Y(920) - 12, 'class': 'tick', 'text-anchor': 'end', fill: 'var(--bad)' }, ch); l2.textContent = 'Triton v1 (untuned)';
+  var rows = '<tr><th>Size</th><th>torch (GFLOPS)</th><th>Triton v1 (GFLOPS)</th><th>Triton vs torch</th></tr>';
+  data.forEach(function (d) { rows += '<tr><td>' + d.n + '</td><td>' + fmt(d.torch) + '</td><td>' + fmt(d.triton) + '</td><td>' + Math.round(d.triton / d.torch * 100) + '%</td></tr>'; });
+  $('table').innerHTML = rows;
+})();
+</script>
+</body>
+</html>

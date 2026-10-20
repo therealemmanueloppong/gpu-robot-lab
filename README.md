@@ -8,13 +8,23 @@ Status: early. The Triton matmul and softmax kernels are **correct** (checked ag
 
 See [docs/PLAN.md](docs/PLAN.md) for the stages, the rules for what can be claimed, and the risks.
 
+## See it
+
+- **Interactive explainer**: `docs/index.html` animates how the tiled kernel loads tiles and why it reads about 64 times less memory than a naive multiply. It also shows the measured results. (Open the file in a browser, or use the GitHub Pages link once it is enabled.)
+- **Results chart**: below, from real runs on a Colab T4.
+- **Tuning study**: `scripts/tune_matmul.py` sweeps tile sizes, warps and pipeline stages. Its chart goes here once it has been run.
+
 ## What is in the repo
 
 - `src/gpu_robot_lab/kernels/` a tiled matrix multiply and a row-wise softmax in Triton
+- `src/gpu_robot_lab/tiling.py` a CPU model of the kernel's tiling and edge handling, tested in CI, with the memory-traffic formula
 - `src/gpu_robot_lab/bench.py` timing that works correctly for asynchronous GPU code, plus GFLOPS and speedup helpers
 - `src/gpu_robot_lab/reference.py` and `checks.py` the CPU ground truth and error checking
 - `scripts/check_kernels.py` checks every kernel against PyTorch
 - `scripts/bench_matmul.py` times the Triton matmul against `torch.matmul` and writes a CSV
+- `scripts/tune_matmul.py` and `scripts/plot_tuning.py` sweep launch settings and chart the best ones (GPU needed, not yet run)
+- `scripts/plot_results.py` draws a results chart from a CSV
+- `docs/index.html` the interactive explainer
 - `notebooks/colab_quickstart.ipynb` runs all of the above on a free Colab GPU
 
 ## Run the tests (no GPU needed)

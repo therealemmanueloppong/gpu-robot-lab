@@ -38,8 +38,19 @@ def _matmul_kernel(
     tl.store(c_ptrs, acc.to(tl.float16), mask=(offs_m[:, None] < M) & (offs_n[None, :] < N))
 
 
-def matmul(a: torch.Tensor, b: torch.Tensor, block_m: int = 64, block_n: int = 64, block_k: int = 32) -> torch.Tensor:
-    """C = A @ B for float16 CUDA tensors, accumulating in float32."""
+def matmul(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    block_m: int = 64,
+    block_n: int = 64,
+    block_k: int = 32,
+    num_warps: int | None = None,
+    num_stages: int | None = None,
+) -> torch.Tensor:
+    """C = A @ B for float16 CUDA tensors, accumulating in float32.
+
+    ``num_warps`` and ``num_stages`` are Triton launch settings. Leave them as None for Triton's defaults.
+    """
     if a.dtype != torch.float16 or b.dtype != torch.float16:
         raise ValueError("matmul expects float16 inputs")
     if not (a.is_cuda and b.is_cuda):
@@ -50,9 +61,15 @@ def matmul(a: torch.Tensor, b: torch.Tensor, block_m: int = 64, block_n: int = 6
     _, n = b.shape
     c = torch.empty((m, n), device=a.device, dtype=torch.float16)
     grid = (triton.cdiv(m, block_m), triton.cdiv(n, block_n))
+    launch = {}
+    if num_warps is not None:
+        launch["num_warps"] = num_warps
+    if num_stages is not None:
+        launch["num_stages"] = num_stages
     _matmul_kernel[grid](
         a, b, c, m, n, k,
         a.stride(0), a.stride(1), b.stride(0), b.stride(1), c.stride(0), c.stride(1),
         BLOCK_M=block_m, BLOCK_N=block_n, BLOCK_K=block_k,
+        **launch,
     )
     return c
