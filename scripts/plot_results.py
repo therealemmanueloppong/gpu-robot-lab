@@ -27,10 +27,9 @@ def main(path: str) -> int:
         ax.plot(sizes, tuned_g, marker="o", linewidth=2, color="#e08a1e", label="Triton v1, best swept settings")
     if v2_g:
         ax.plot(sizes, v2_g, marker="o", linewidth=2, color="#2e9e6b", label="Triton v2 (autotuned)")
-        for x, t, y in zip(sizes, torch_g, v2_g):
-            ax.annotate(f"{y / t:.0%}", (x, y), textcoords="offset points", xytext=(0, 9), ha="center", fontsize=8, color="#2e9e6b")
-    for x, t, y in zip(sizes, torch_g, triton_g):
-        ax.annotate(f"{y / t:.0%}", (x, y), textcoords="offset points", xytext=(0, 9), ha="center", fontsize=8, color="#d9534f")
+    newest, newest_color = (v2_g, "#2e9e6b") if v2_g else (triton_g, "#d9534f")
+    for x, t, y in zip(sizes, torch_g, newest):
+        ax.annotate(f"{y / t:.0%}", (x, y), textcoords="offset points", xytext=(0, 9), ha="center", fontsize=8, color=newest_color)
     ax.set_xscale("log", base=2)
     ax.set_xticks(sizes)
     ax.set_xticklabels([str(s) for s in sizes])
@@ -40,7 +39,7 @@ def main(path: str) -> int:
     ax.set_ylim(bottom=-1000)
     ax.grid(alpha=0.3)
     ax.legend()
-    fig.text(0.01, 0.01, "Labels show Triton as a percentage of torch.matmul. Data: " + Path(path).name, fontsize=7, color="gray")
+    fig.text(0.01, 0.01, "Labels show the newest Triton version as a percentage of torch.matmul in the same run. Data: " + Path(path).name, fontsize=7, color="gray")
     fig.tight_layout(rect=(0, 0.03, 1, 1))
     out = Path(path).with_suffix(".png")
     fig.savefig(out)

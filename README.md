@@ -4,7 +4,7 @@
 
 GPU kernels written from scratch and benchmarked against PyTorch, then used to speed up a simulated robot. Built to run on a free shared GPU, so it costs nothing.
 
-Status: early. The Triton matmul and softmax kernels are **correct** (checked against PyTorch on a Colab T4). The first matmul reached about 4% of `torch.matmul`; a sweep of 135 settings raised it to **about 16%** (3.1 times faster than the default). v2, built from those findings, has not been run yet. Measurements are below.
+Status: early but measured. The Triton matmul and softmax kernels are **correct** (checked against PyTorch on a Colab T4). The first matmul reached about 4% of `torch.matmul`. A sweep of 135 settings and a compiler check found that it was **spilling registers**, and tuned versions run about **3.4 times faster** (v2: 11 to 17% of PyTorch at large sizes). The remaining gap to PyTorch is open work. Measurements are below.
 
 See [docs/PLAN.md](docs/PLAN.md) for the stages, the rules for what can be claimed, and the risks.
 
@@ -13,17 +13,17 @@ See [docs/PLAN.md](docs/PLAN.md) for the stages, the rules for what can be claim
 - **[Interactive explainer (live page)](https://therealemmanueloppong.github.io/gpu-robot-lab/)**: animates how the tiled kernel loads tiles and why it reads about 64 times less memory than a naive multiply, and shows the measured results. The source is `docs/index.html`.
 - **Results chart**: below, from real runs on a Colab T4.
 - **v2 kernel**: autotuning plus grouped launch order. `scripts/check_kernels.py` and `scripts/bench_matmul.py` now check and time v1, v2 and `torch.matmul` together, so one Colab run produces the comparison.
-- **Tuning study**: `scripts/tune_matmul.py` sweeps tile sizes, warps and pipeline stages. Its chart goes here once it has been run.
+- **Tuning study and diagnosis**: `scripts/tune_matmul.py` sweeps tile sizes, warps and pipeline stages, and `scripts/inspect_kernel.py` prints register use and spills. Results below.
 
 ## What is in the repo
 
-- `src/gpu_robot_lab/kernels/` a tiled matrix multiply (`matmul.py`, v1), an autotuned v2 with a cache-friendly launch order (`matmul_v2.py`, **written but not yet run on a GPU**), and a row-wise softmax, all in Triton
+- `src/gpu_robot_lab/kernels/` a tiled matrix multiply (`matmul.py`, v1), an autotuned v2 with a cache-friendly launch order (`matmul_v2.py`), and a row-wise softmax, all in Triton
 - `src/gpu_robot_lab/tiling.py` a CPU model of the kernel's tiling, edge handling and launch order, tested in CI, with the memory-traffic formula
 - `src/gpu_robot_lab/bench.py` timing that works correctly for asynchronous GPU code, plus GFLOPS and speedup helpers
 - `src/gpu_robot_lab/reference.py` and `checks.py` the CPU ground truth and error checking
 - `scripts/check_kernels.py` checks every kernel against PyTorch
 - `scripts/bench_matmul.py` times the Triton matmul against `torch.matmul` and writes a CSV
-- `scripts/tune_matmul.py` and `scripts/plot_tuning.py` sweep launch settings and chart the best ones (GPU needed, not yet run)
+- `scripts/tune_matmul.py` and `scripts/plot_tuning.py` sweep launch settings and chart the best ones (GPU needed)
 - `scripts/plot_results.py` draws a results chart from a CSV
 - `docs/index.html` the interactive explainer
 - `notebooks/colab_quickstart.ipynb` runs all of the above on a free Colab GPU
@@ -48,27 +48,43 @@ Kaggle notebooks also offer a free GPU and work the same way. Free-tier limits c
 
 ## Results
 
-### Matrix multiply, first version (untuned), float16
+All numbers are from a free Tesla T4 on Google Colab on 2026-10-20 (torch 2.11.0, triton 3.6.0, CUDA 13.0), in float16. Every kernel version was checked against PyTorch first and gave correct answers.
 
-![Triton v1 versus torch.matmul on a Tesla T4](results/matmul_t4_2026-10-20.png)
+### 1. All versions compared (second run)
 
-Measured on a Tesla T4 on Google Colab, 2026-10-20, with `python scripts/bench_matmul.py` (median of 50 runs after 10 warm-up runs). The package versions were not printed on this run, so the script now prints them. Raw data: [results/matmul_t4_2026-10-20.csv](results/matmul_t4_2026-10-20.csv).
+![All versions compared on a Tesla T4](results/matmul_t4_run2_2026-10-20.png)
 
-| Size | torch.matmul (GFLOPS) | Triton v1 (GFLOPS) | Triton speed vs torch |
+Command: `python scripts/bench_matmul.py` (median of 50 runs after 10 warm-up runs). Raw data: [results/matmul_t4_run2_2026-10-20.csv](results/matmul_t4_run2_2026-10-20.csv).
+
+| Size | torch.matmul (GFLOPS) | v1 default | v1, best sweep settings | v2 autotuned | v2 vs torch |
+|---|---|---|---|---|---|
+| 256 | 1,023 | 215 | 232 | 173 | 17% |
+| 512 | 4,427 | 975 | 1,353 | 1,226 | 28% |
+| 1024 | 23,876 | 1,126 | 3,171 | 3,125 | 13% |
+| 2048 | 32,751 | 1,081 | 3,222 | 3,728 | 11% |
+| 4096 | 21,833 | 1,063 | 3,097 | 3,652 | 17% |
+
+At 2048 and 4096, v2 is about 3.4 times faster than the first kernel and 15 to 18% faster than v1 with the best sweep settings. At small sizes v2 is not better. v2 changes several things at once (tile settings picked by the autotuner, and the grouped launch order), so these numbers do not show which one helped.
+
+Run-to-run variation is large on a shared GPU: `torch.matmul` at 2048 measured 17,606 GFLOPS in the first run and 32,751 in this one. Compare versions within one run, and treat the percentages as rough.
+
+### 2. Why the first kernel was slow
+
+`python scripts/inspect_kernel.py` prints what the compiler did for each setting ([results/inspect_t4_2026-10-20.csv](results/inspect_t4_2026-10-20.csv)). Speeds are from the sweep below (3 pipeline stages, 2048 x 2048).
+
+| Setting (tile MxNxK, warps) | Registers | Spills | GFLOPS |
 |---|---|---|---|
-| 256 | 790 | 267 | 0.34x |
-| 512 | 4,784 | 753 | 0.16x |
-| 1024 | 12,870 | 983 | 0.08x |
-| 2048 | 17,606 | 939 | 0.05x |
-| 4096 | 22,456 | 920 | 0.04x |
+| 64x64x32, 4 warps (v1 default) | 255 | 84 | 979 |
+| 64x64x32, 2 warps | 64 | 972 | 90 |
+| 64x64x32, 8 warps | 188 | 0 | 2,528 |
+| 64x64x16, 8 warps | 118 | 0 | 2,807 |
+| 64x64x16, 4 warps (best) | 200 | 0 | 3,035 |
 
-Correctness: `scripts/check_kernels.py` passed for all 4 matmul shapes (largest error 0.0625 in float16) and all 3 softmax shapes.
+The default kernel used 255 registers per thread, which is the maximum, and the compiler spilled 84 values to slow memory. The 2-warp setting spilled 972 and ran about 100 times slower. Settings with a K-tile of 16 needed fewer registers and spilled nothing. Settings that spill are slow and settings that do not are fast, which is strong evidence that spilling was the main cause. It is a pattern across a few settings, not a controlled experiment.
 
-What this says: the kernel gives the right answers, but at large sizes it reaches only about 4% of PyTorch's speed, so its work is not using the GPU well yet. The first version uses one fixed tile size and the default launch settings. Next: try larger tiles, more warps and pipeline stages, measure each change on its own, and record what helps.
+### 3. The tuning sweep
 
-### Tuning sweep (v1 kernel, 2048 x 2048, float16)
-
-Measured on a Tesla T4 on Google Colab, 2026-10-20, with `python scripts/tune_matmul.py --size 2048` (torch 2.11.0, triton 3.6.0, CUDA 13.0). It tried 135 combinations of tile size, K-tile, warps and pipeline stages. All 135 compiled and gave correct answers. `torch.matmul` ran at about 18,500 GFLOPS in the same run.
+Command: `python scripts/tune_matmul.py --size 2048`. It tried 135 combinations of tile size, K-tile, warps and pipeline stages. All 135 compiled and gave correct answers. `torch.matmul` ran at about 18,500 GFLOPS in that run.
 
 | Setting (tile MxNxK, warps, stages) | GFLOPS | vs torch |
 |---|---|---|
@@ -79,14 +95,15 @@ Measured on a Tesla T4 on Google Colab, 2026-10-20, with `python scripts/tune_ma
 | 64x128x16, 8 warps, 4 stages | 2,892 | 16% |
 | 64x128x16, 8 warps, 2 stages | 2,886 | 16% |
 
-What the sweep showed:
-- Halving the K-tile from 32 to 16 (same tile and warps) made the kernel about 3.1 times faster. The reason is not established yet: `scripts/inspect_kernel.py` prints register use and spills to investigate it.
-- The number of pipeline stages hardly mattered (3,045, 3,036 and 3,035 GFLOPS). A possible explanation is that the T4's generation of GPU lacks the hardware support those stages rely on, but that is a hypothesis, not a finding.
-- Some settings were very slow: 2 warps with 64x64 tiles ran 10 to 100 times slower than 4 warps.
+Pipeline stages hardly mattered (3,045, 3,036 and 3,035 GFLOPS). One possible reason is that the T4's generation of GPU lacks the hardware support those stages rely on. That is a hypothesis and has not been tested. Raw numbers for the rows above: [results/tuning_top5_t4_2048_2026-10-20.csv](results/tuning_top5_t4_2048_2026-10-20.csv). The full 135-row file is not in the repo yet.
 
-Raw numbers for the rows above: [results/tuning_top5_t4_2048_2026-10-20.csv](results/tuning_top5_t4_2048_2026-10-20.csv). The full 135-row file is not in the repo yet.
+### First run (v1 only)
 
-### Still unmeasured
+Before tuning, v1 reached 4 to 34% of PyTorch depending on size ([results/matmul_t4_2026-10-20.csv](results/matmul_t4_2026-10-20.csv), [chart](results/matmul_t4_2026-10-20.png)).
 
-- v2 (autotuning plus grouped launch order) and `v1 with the best swept settings` are in the benchmark script but have not been run.
-- Whether the grouped launch order helps is not known. It is combined with autotuning in v2, so isolating it needs another experiment.
+### Not yet measured
+
+- Which part of v2 helps: the tile settings, or the grouped launch order. That needs one change at a time.
+- How much the results vary: each number above is from one run.
+- Why `torch.matmul` is still about 6 to 9 times faster at large sizes.
+- The robot simulation (stage 2 of [docs/PLAN.md](docs/PLAN.md)) is not built.

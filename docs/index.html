@@ -49,7 +49,7 @@
 </head>
 <body>
 <main>
-  <p><span class="chip">Early stage: kernels are correct, tuning raised v1 from 4% to 16% of PyTorch</span></p>
+  <p><span class="chip">Early stage: tuned kernels reach about 11 to 17% of PyTorch (3.4x the first version)</span></p>
   <h1>GPU Robot Lab</h1>
   <p class="muted">GPU kernels written from scratch and benchmarked against PyTorch, then used to speed up a simulated robot. This page explains the first kernel, a tiled matrix multiply, and shows what has been measured so far. <a href="https://github.com/therealemmanueloppong/gpu-robot-lab">Code on GitHub</a>.</p>
 
@@ -97,20 +97,29 @@
   </div>
 
   <h2>3. What has been measured</h2>
-  <p>First version of the kernel, 16-bit numbers, on a free Tesla T4 on Google Colab (2026-10-20). The answers match PyTorch, but the speed does not yet.</p>
+  <p>Tesla T4 on free Google Colab, 2026-10-20, 16-bit numbers. Every version gives answers that match PyTorch. Four versions are compared: PyTorch, the first kernel, the first kernel with the best settings from a 135-setting sweep, and v2 (automatic tuning plus the grouped launch order).</p>
   <div class="card">
-    <svg id="chart" viewBox="0 0 720 340" role="img" aria-label="Line chart of throughput versus matrix size for torch.matmul and the first Triton kernel"></svg>
+    <svg id="chart" viewBox="0 0 720 350" role="img" aria-label="Line chart of throughput versus matrix size for torch.matmul and three Triton versions"></svg>
     <table id="table"></table>
+    <p class="muted" style="font-size:14px">At 2048 and 4096, v2 is about 3.4 times faster than the first kernel and 15 to 18 percent faster than the first kernel with the best sweep settings. It reaches 11 to 17 percent of PyTorch at those sizes. v2 changes several things at once, so this does not show which one helped. PyTorch's own speed changed between runs (17,606 and 32,751 GFLOPS at 2048), so percentages move; compare versions within one run.</p>
+  </div>
 
-    <h3 style="font-size:17px;margin:24px 0 4px">After tuning: 135 settings tried</h3>
-    <p class="muted" style="font-size:15px;margin-top:0">Tesla T4, 2048 x 2048, float16, 2026-10-20. Every setting gave correct answers.</p>
-    <svg id="tune" viewBox="0 0 720 230" role="img" aria-label="Bar chart comparing the default setting, the best tuned setting and torch.matmul"></svg>
-    <p class="muted" style="font-size:14px">Changing only the K-tile from 32 to 16 made the kernel about 3.1 times faster. Pipeline stages hardly mattered (3,045, 3,036 and 3,035 GFLOPS). PyTorch is still about 6 times faster, so there is a lot left to explain and close.</p>
-    <p class="muted" style="font-size:14px">The first kernel uses one fixed tile size and default launch settings, and it reaches about 4 percent of PyTorch's speed at 4096.</p>
+  <h2>Why the first kernel was slow</h2>
+  <p>The first kernel used 255 registers per thread, the maximum, and spilled 84 of them to slow memory. Smaller K-tiles needed fewer registers and spilled none.</p>
+  <div class="card">
+    <table id="spills"><tr><th>Setting (tile, warps)</th><th>Registers</th><th>Spills</th><th>GFLOPS at 2048</th></tr>
+      <tr><td>64x64x32, 4 warps (first kernel)</td><td>255</td><td>84</td><td>979</td></tr>
+      <tr><td>64x64x32, 2 warps</td><td>64</td><td>972</td><td>90</td></tr>
+      <tr><td>64x64x32, 8 warps</td><td>188</td><td>0</td><td>2,528</td></tr>
+      <tr><td>64x64x16, 8 warps</td><td>118</td><td>0</td><td>2,807</td></tr>
+      <tr><td>64x64x16, 4 warps (best)</td><td>200</td><td>0</td><td>3,035</td></tr>
+    </table>
+    <svg id="tune" viewBox="0 0 720 230" role="img" aria-label="Bar chart comparing the default setting, the best tuned setting and torch.matmul in the 135-setting sweep" style="margin-top:16px"></svg>
+    <p class="muted" style="font-size:14px">Registers and spills come from the compiler for each setting. Speeds come from the 135-setting sweep (torch.matmul ran at 18,505 GFLOPS in that run). The link between spills and speed is a strong pattern, not a controlled proof. Pipeline stages hardly mattered (3,045, 3,036 and 3,035 GFLOPS).</p>
   </div>
 
   <h2>4. What is next</h2>
-  <p>Version 2 of the kernel (automatic tuning built from these findings, plus the grouped launch order above) is written and waiting for its first GPU run. Then find out why a K-tile of 16 is so much faster, and report what actually helps. Then train a simulated robot on a GPU simulator and compare simulation speed on the CPU and GPU. Everything here runs on a free shared GPU. <a href="https://colab.research.google.com/github/therealemmanueloppong/gpu-robot-lab/blob/main/notebooks/colab_quickstart.ipynb">Run it yourself in Colab</a>.</p>
+  <p>Find out which part of v2 helps (the tile settings or the grouped launch order) by changing one at a time, repeat the measurements to see how much they vary, and close more of the gap to PyTorch. Then train a simulated robot on a GPU simulator. Everything here runs on a free shared GPU. <a href="https://colab.research.google.com/github/therealemmanueloppong/gpu-robot-lab/blob/main/notebooks/colab_quickstart.ipynb">Run it yourself in Colab</a>.</p>
 </main>
 
 <script>
@@ -241,29 +250,6 @@
   $('grp').onchange = drawOrder;
   drawOrder();
 
-  /* measured data, from results/matmul_t4_2026-10-20.csv */
-  var data = [
-    { n: 256, torch: 790.5, triton: 267.2 }, { n: 512, torch: 4784.3, triton: 753.3 },
-    { n: 1024, torch: 12869.5, triton: 983.3 }, { n: 2048, torch: 17606.1, triton: 939.4 },
-    { n: 4096, torch: 22456.0, triton: 920.4 }
-  ];
-  var ch = $('chart'), L = 70, R = 700, Tp = 20, B = 290, ymax = 24000;
-  function X(i) { return L + i * (R - L) / (data.length - 1); }
-  function Y(v) { return B - v / ymax * (B - Tp); }
-  [0, 6000, 12000, 18000, 24000].forEach(function (v) {
-    el('line', { x1: L, x2: R, y1: Y(v), y2: Y(v), 'class': 'axis' }, ch);
-    var t = el('text', { x: L - 8, y: Y(v) + 4, 'class': 'tick', 'text-anchor': 'end' }, ch); t.textContent = fmt(v);
-  });
-  data.forEach(function (d, i) { var t = el('text', { x: X(i), y: B + 18, 'class': 'tick', 'text-anchor': 'middle' }, ch); t.textContent = d.n; });
-  var xl = el('text', { x: (L + R) / 2, y: B + 38, 'class': 'tick', 'text-anchor': 'middle' }, ch); xl.textContent = 'Matrix size (N x N)';
-  var yl = el('text', { x: 12, y: (Tp + B) / 2, 'class': 'tick', 'text-anchor': 'middle', transform: 'rotate(-90 12 ' + (Tp + B) / 2 + ')' }, ch); yl.textContent = 'GFLOPS (higher is better)';
-  function line(key, color) {
-    el('polyline', { points: data.map(function (d, i) { return X(i) + ',' + Y(d[key]); }).join(' '), fill: 'none', stroke: color, 'stroke-width': 2.5 }, ch);
-    data.forEach(function (d, i) { el('circle', { cx: X(i), cy: Y(d[key]), r: 4, fill: color }, ch); });
-  }
-  line('torch', 'var(--a)'); line('triton', 'var(--bad)');
-  var l1 = el('text', { x: R - 4, y: Y(22456) - 10, 'class': 'tick', 'text-anchor': 'end', fill: 'var(--a)' }, ch); l1.textContent = 'torch.matmul';
-  var l2 = el('text', { x: R - 4, y: Y(920) - 12, 'class': 'tick', 'text-anchor': 'end', fill: 'var(--bad)' }, ch); l2.textContent = 'Triton v1 (untuned)';
   /* tuning bars, from the 2026-10-20 sweep output */
   var bars = [
     { name: 'torch.matmul', v: 18505, c: 'var(--a)' },
@@ -279,8 +265,38 @@
     v.textContent = Math.round(b.v).toLocaleString('en-US') + ' GFLOPS (' + Math.round(b.v / 18505 * 100) + '%)';
   });
 
-  var rows = '<tr><th>Size</th><th>torch (GFLOPS)</th><th>Triton v1 (GFLOPS)</th><th>Triton vs torch</th></tr>';
-  data.forEach(function (d) { rows += '<tr><td>' + d.n + '</td><td>' + fmt(d.torch) + '</td><td>' + fmt(d.triton) + '</td><td>' + Math.round(d.triton / d.torch * 100) + '%</td></tr>'; });
+  /* second benchmark run, from results/matmul_t4_run2_2026-10-20.csv */
+  var data = [
+    { n: 256, torch: 1022.8, v1: 214.9, tuned: 231.9, v2: 172.5 },
+    { n: 512, torch: 4427.3, v1: 975.4, tuned: 1353.4, v2: 1225.8 },
+    { n: 1024, torch: 23876.1, v1: 1126.3, tuned: 3171.2, v2: 3125.4 },
+    { n: 2048, torch: 32751.4, v1: 1080.9, tuned: 3222.1, v2: 3727.5 },
+    { n: 4096, torch: 21832.7, v1: 1063.3, tuned: 3097.4, v2: 3652.2 }
+  ];
+  var series = [
+    { key: 'torch', name: 'torch.matmul', color: 'var(--a)' },
+    { key: 'v1', name: 'Triton v1 (default)', color: 'var(--bad)' },
+    { key: 'tuned', name: 'v1, best sweep settings', color: 'var(--c)' },
+    { key: 'v2', name: 'Triton v2 (autotuned)', color: 'var(--b)' }
+  ];
+  var ch = $('chart'), L = 70, R = 700, Tp = 20, B = 270, ymax = 34000;
+  function X(i) { return L + i * (R - L) / (data.length - 1); }
+  function Y(v) { return B - v / ymax * (B - Tp); }
+  [0, 10000, 20000, 30000].forEach(function (v) {
+    el('line', { x1: L, x2: R, y1: Y(v), y2: Y(v), 'class': 'axis' }, ch);
+    var t = el('text', { x: L - 8, y: Y(v) + 4, 'class': 'tick', 'text-anchor': 'end' }, ch); t.textContent = fmt(v);
+  });
+  data.forEach(function (d, i) { var t = el('text', { x: X(i), y: B + 18, 'class': 'tick', 'text-anchor': 'middle' }, ch); t.textContent = d.n; });
+  var xl = el('text', { x: (L + R) / 2, y: B + 38, 'class': 'tick', 'text-anchor': 'middle' }, ch); xl.textContent = 'Matrix size (N x N)';
+  var yl = el('text', { x: 12, y: (Tp + B) / 2, 'class': 'tick', 'text-anchor': 'middle', transform: 'rotate(-90 12 ' + (Tp + B) / 2 + ')' }, ch); yl.textContent = 'GFLOPS (higher is better)';
+  series.forEach(function (sr, k) {
+    el('polyline', { points: data.map(function (d, i) { return X(i) + ',' + Y(d[sr.key]); }).join(' '), fill: 'none', stroke: sr.color, 'stroke-width': 2.5 }, ch);
+    data.forEach(function (d, i) { el('circle', { cx: X(i), cy: Y(d[sr.key]), r: 4, fill: sr.color }, ch); });
+    el('rect', { x: L + k * 160, y: B + 48, width: 12, height: 12, rx: 3, fill: sr.color }, ch);
+    var lt = el('text', { x: L + k * 160 + 18, y: B + 59, 'class': 'tick' }, ch); lt.textContent = sr.name;
+  });
+  var rows = '<tr><th>Size</th><th>torch</th><th>v1</th><th>v1 tuned</th><th>v2</th><th>v2 vs torch</th></tr>';
+  data.forEach(function (d) { rows += '<tr><td>' + d.n + '</td><td>' + fmt(Math.round(d.torch)) + '</td><td>' + fmt(Math.round(d.v1)) + '</td><td>' + fmt(Math.round(d.tuned)) + '</td><td>' + fmt(Math.round(d.v2)) + '</td><td>' + Math.round(d.v2 / d.torch * 100) + '%</td></tr>'; });
   $('table').innerHTML = rows;
 })();
 </script>
