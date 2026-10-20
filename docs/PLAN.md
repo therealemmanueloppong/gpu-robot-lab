@@ -19,13 +19,13 @@ Done when: `scripts/check_kernels.py` passes on a GPU and `scripts/bench_matmul.
 
 ## Stage 2: robot simulation on the GPU
 
-Status: built and verified on a CPU. GPU numbers are not measured yet.
+Status: built, verified on a CPU, and measured on a Colab T4 (up to 129 times the simulation steps per second of one CPU thread at 16,384 robots; swing-up found on the GPU).
 
 What was built: a simulated pendulum whose motor is too weak to lift it directly, so it has to swing. A planner tries thousands of motor plans at once in MuJoCo's GPU-capable simulator (MJX), keeps the best, and repeats (the cross-entropy method). The best plan is replayed in plain MuJoCo as an independent check, then drawn as a GIF. `scripts/bench_sim.py` compares one CPU thread against many robots at once.
 
 Why planning instead of reinforcement learning: it has far fewer moving parts and library versions, so it can be tested on a CPU before any GPU time is used, and it uses the GPU in the same way (thousands of simultaneous simulations). A learned policy remains possible later.
 
-Done when: `notebooks/robot_sim_colab.ipynb` has been run on a GPU, `results/` has the GPU swing-up GIF and the CPU versus GPU speed table, and the README reports both with the device and date.
+Remaining: add the GIF produced by the GPU run, repeat the measurements, and try a robot with contacts.
 
 ## Stage 3 (optional): use a custom kernel in the robot loop
 

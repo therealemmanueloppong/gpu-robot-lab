@@ -1,0 +1,21 @@
+Colab run, 2026-10-20: python scripts/run_swingup.py --batch 4096 --iterations 15
+JAX device: gpu (Tesla T4); jax 0.11.1; mujoco 3.16.0
+
+Planning took 9.1 s with 4096 plans per iteration
+  iteration  1: best score +0.112, final tip height +0.366 m
+  iteration  2: best score +0.112, final tip height +0.366 m
+  iteration  3: best score +0.112, final tip height +0.366 m
+  iteration  4: best score +0.112, final tip height +0.366 m
+  iteration  5: best score +0.112, final tip height +0.366 m
+  iteration  6: best score +0.153, final tip height +0.451 m
+  iteration  7: best score +0.213, final tip height +0.491 m
+  iteration  8: best score +0.222, final tip height +0.481 m
+  iteration  9: best score +0.259, final tip height +0.499 m
+  iteration 10: best score +0.278, final tip height +0.494 m
+  iteration 11: best score +0.441, final tip height +0.500 m
+  iteration 12: best score +0.441, final tip height +0.499 m
+  iteration 13: best score +0.441, final tip height +0.499 m
+  iteration 14: best score +0.441, final tip height +0.499 m
+  iteration 15: best score +0.450, final tip height +0.494 m
+CPU replay: final tip height +0.494 m (top is 0.5 m)
+SUCCESS

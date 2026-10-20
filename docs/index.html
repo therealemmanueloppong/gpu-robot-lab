@@ -49,7 +49,7 @@
 </head>
 <body>
 <main>
-  <p><span class="chip">Early stage: tuned kernels reach about 11 to 17% of PyTorch (3.4x the first version)</span></p>
+  <p><span class="chip">Early stage: tuned kernels reach about 11 to 17% of PyTorch; GPU robot simulation runs up to 129x faster than one CPU thread</span></p>
   <h1>GPU Robot Lab</h1>
   <p class="muted">GPU kernels written from scratch and benchmarked against PyTorch, then used to speed up a simulated robot. This page explains the first kernel, a tiled matrix multiply, and shows what has been measured so far. <a href="https://github.com/therealemmanueloppong/gpu-robot-lab">Code on GitHub</a>.</p>
 
@@ -122,11 +122,19 @@
   <p>The same idea of doing many things at once applies to robots. The pendulum below has a motor too weak to lift it, so it must swing back and forth to reach the top. A planner tries thousands of motor plans at the same time in a simulator, keeps the best, and repeats. The final plan is then replayed in a separate simulator as a check.</p>
   <div class="card" style="text-align:center">
     <img src="swingup_cpu_preview.gif" alt="A pendulum swinging back and forth until it reaches the top" width="288" height="288" style="max-width:100%;height:auto">
-    <p class="muted" style="font-size:14px;text-align:left">This preview was planned from 1,024 parallel simulations on a laptop CPU in 2.8 seconds. The replay in plain MuJoCo ended 0.498 m above the hinge, where the top is 0.5 m. It has not been run on a GPU yet, so there is no GPU speed-up to claim.</p>
+    <p class="muted" style="font-size:14px;text-align:left">Preview GIF, planned from 1,024 parallel simulations on a laptop CPU in 2.8 seconds. The same planner also found a swing-up on a Colab GPU (4,096 plans per iteration): the replay in plain MuJoCo ended 0.494 m above the hinge, where the top is 0.5 m.</p>
+  </div>
+
+  <h3 style="font-size:17px;margin:24px 0 4px">How much faster is the GPU?</h3>
+  <p class="muted" style="margin-top:0">Simulation steps per second for a pendulum, on a Tesla T4 (2026-10-20), compared with one CPU thread (366,143 steps per second).</p>
+  <div class="card">
+    <svg id="simbars" viewBox="0 0 720 270" role="img" aria-label="Bar chart of GPU simulation speed relative to one CPU thread for different numbers of robots"></svg>
+    <table id="simtable"></table>
+    <p class="muted" style="font-size:14px">For a single robot the GPU is about 50 times slower than the CPU. It pulls ahead at around a hundred robots and reaches 129 times at 16,384, which is why GPUs matter when learning needs thousands of simulated robots. Limits: a pendulum is very cheap to simulate, the CPU baseline is one thread, and these come from one run.</p>
   </div>
 
   <h2>5. What is next</h2>
-  <p>Find out which part of v2 helps (the tile settings or the grouped launch order) by changing one at a time, repeat the measurements to see how much they vary, and close more of the gap to PyTorch. Then run the robot simulation on a GPU and measure how much faster many simulated robots run than one CPU thread. Everything here runs on a free shared GPU. <a href="https://colab.research.google.com/github/therealemmanueloppong/gpu-robot-lab/blob/main/notebooks/colab_quickstart.ipynb">Run it yourself in Colab</a>.</p>
+  <p>Find out which part of v2 helps (the tile settings or the grouped launch order) by changing one at a time, repeat the measurements to see how much they vary, and close more of the gap to PyTorch. Repeat the robot measurements, try a robot with contacts, and see whether the planner itself runs faster on a GPU at the same batch size. Everything here runs on a free shared GPU. <a href="https://colab.research.google.com/github/therealemmanueloppong/gpu-robot-lab/blob/main/notebooks/colab_quickstart.ipynb">Run it yourself in Colab</a>.</p>
 </main>
 
 <script>
@@ -256,6 +264,21 @@
   }
   $('grp').onchange = drawOrder;
   drawOrder();
+
+  /* stage 2 speed test, from results/stage2_gpu/sim_results_t4_2026-10-20.csv */
+  var sim = [[1, 8830, 0.02], [16, 148432, 0.41], [256, 3404911, 9.3], [1024, 11117399, 30.36], [4096, 28721673, 78.44], [16384, 47090112, 128.61]];
+  var sb = $('simbars'), SL = 130, SR = 600, smax = 140;
+  sim.forEach(function (r, i) {
+    var y = 14 + i * 40, w = Math.max(2, r[2] / smax * (SR - SL));
+    var t = el('text', { x: SL - 10, y: y + 19, 'class': 'tick', 'text-anchor': 'end' }, sb); t.textContent = fmt(r[0]) + (r[0] === 1 ? ' robot' : ' robots');
+    el('rect', { x: SL, y: y, width: w, height: 28, rx: 4, fill: r[2] < 1 ? 'var(--bad)' : 'var(--b)' }, sb);
+    var v = el('text', { x: SL + w + 8, y: y + 19, 'class': 'tick' }, sb); v.textContent = (r[2] < 1 ? r[2].toFixed(2) : Math.round(r[2])) + 'x';
+  });
+  var one = el('line', { x1: SL + 1 / smax * (SR - SL), x2: SL + 1 / smax * (SR - SL), y1: 6, y2: 256, stroke: 'var(--muted)', 'stroke-dasharray': '4 4' }, sb);
+  var onl = el('text', { x: SL + 1 / smax * (SR - SL) + 6, y: 264, 'class': 'tick' }, sb); onl.textContent = '1x = one CPU thread';
+  var st = '<tr><th>Robots</th><th>GPU steps per second</th><th>vs one CPU thread</th></tr>';
+  sim.forEach(function (r) { st += '<tr><td>' + fmt(r[0]) + '</td><td>' + fmt(r[1]) + '</td><td>' + (r[2] < 1 ? r[2].toFixed(2) : Math.round(r[2])) + 'x</td></tr>'; });
+  $('simtable').innerHTML = st;
 
   /* tuning bars, from the 2026-10-20 sweep output */
   var bars = [
