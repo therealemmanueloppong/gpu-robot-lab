@@ -1,5 +1,7 @@
 # GPU Robot Lab
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/therealemmanueloppong/gpu-robot-lab/blob/main/notebooks/colab_quickstart.ipynb)
+
 GPU kernels written from scratch and benchmarked against PyTorch, then used to speed up a simulated robot. Built to run on a free shared GPU, so it costs nothing.
 
 Status: early. The Triton matmul and softmax kernels are **correct** (checked against PyTorch on a Colab T4) but the first matmul is **far slower than `torch.matmul`**. Tuning it is stage 1, step 3. Measurements are below.
@@ -27,7 +29,7 @@ GPU tests are skipped automatically when no CUDA GPU is found.
 
 ## Run the kernels on a free GPU
 
-1. Open `notebooks/colab_quickstart.ipynb` in Google Colab (File, then Open notebook, then the GitHub tab).
+1. Click the **Open in Colab** badge at the top of this page.
 2. Choose Runtime, then Change runtime type, and pick a GPU.
 3. Run the cells in order. Expect `ALL PASSED` from the correctness check, then a results table.
 
