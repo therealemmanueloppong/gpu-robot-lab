@@ -104,18 +104,20 @@ def plan_swing_up(
     knots: int = 30,
     elite_fraction: float = 0.1,
     seed: int = 0,
+    rollout=None,
 ) -> PlanResult:
     """Find motor commands that swing the pole up, using the cross-entropy method.
 
     Each iteration tries ``batch`` random plans at the same time in the simulator, keeps the best
     ``elite_fraction`` of them, and samples the next batch around those. A plan has ``knots``
-    values, each held for ``horizon // knots`` steps.
+    values, each held for ``horizon // knots`` steps. Pass a ``rollout`` from ``make_batched_rollout`` to
+    reuse an already compiled simulator (otherwise one is built, and compiled, on the first iteration).
     """
     import jax.numpy as jnp
 
     if horizon % knots:
         raise ValueError("horizon must be a multiple of knots")
-    rollout = make_batched_rollout(model)
+    rollout = rollout or make_batched_rollout(model)
     rng = np.random.default_rng(seed)
     mean, std = np.zeros(knots), np.full(knots, 0.8)
     hold = horizon // knots
@@ -137,3 +139,76 @@ def plan_swing_up(
         best_scores.append(best_score)
         final_heights.append(best_final)
     return PlanResult(best_controls, best_scores, final_heights, success=final_heights[-1] > 0.9 * POLE_LENGTH)
+
+
+# ---------------------------------------------------------------------------------------------
+# A contact-rich test: a box dropped onto the floor. Contacts (collisions, friction) make each
+# simulation step much more expensive than the pendulum, so this shows how the CPU and GPU compare
+# when the physics is harder. It is not a walking robot.
+
+BOX_DT = 0.005
+BOX_START_HEIGHT = 0.6
+BOX_HALF_SIZE = 0.1
+
+BOX_XML = f"""
+<mujoco model="box">
+  <option timestep="{BOX_DT}" gravity="0 0 -9.81"/>
+  <worldbody>
+    <geom name="floor" type="plane" size="5 5 0.1"/>
+    <body name="box" pos="0 0 {BOX_START_HEIGHT}">
+      <freejoint/>
+      <geom type="box" size="{BOX_HALF_SIZE} {BOX_HALF_SIZE} {BOX_HALF_SIZE}" mass="1"/>
+    </body>
+  </worldbody>
+</mujoco>
+"""
+
+
+def make_box_model():
+    import mujoco
+
+    return mujoco.MjModel.from_xml_string(BOX_XML)
+
+
+def random_box_starts(batch: int, seed: int = 0) -> tuple[np.ndarray, np.ndarray]:
+    """Random orientations and small random velocities for ``batch`` boxes: qpos (batch, 7), qvel (batch, 6)."""
+    rng = np.random.default_rng(seed)
+    quat = rng.standard_normal((batch, 4))
+    quat /= np.linalg.norm(quat, axis=1, keepdims=True)
+    qpos = np.zeros((batch, 7))
+    qpos[:, 2] = BOX_START_HEIGHT
+    qpos[:, 3:] = quat
+    qvel = rng.normal(scale=0.5, size=(batch, 6))
+    return qpos.astype(np.float32), qvel.astype(np.float32)
+
+
+def box_rollout_cpu(model, qpos0: np.ndarray, qvel0: np.ndarray, steps: int) -> float:
+    """Drop one box in plain MuJoCo and return its height at the end."""
+    import mujoco
+
+    data = mujoco.MjData(model)
+    data.qpos[:] = qpos0
+    data.qvel[:] = qvel0
+    for _ in range(steps):
+        mujoco.mj_step(model, data)
+    return float(data.qpos[2])
+
+
+def make_box_rollout(model, steps: int):
+    """Return a function (qpos0 (batch, 7), qvel0 (batch, 6)) -> final box heights (batch,), simulated with MJX."""
+    import jax
+    from mujoco import mjx
+
+    mjx_model = mjx.put_model(model)
+    initial = mjx.make_data(mjx_model)
+
+    def one(qpos0, qvel0):
+        data = initial.replace(qpos=qpos0, qvel=qvel0)
+
+        def step(d, _):
+            return mjx.step(mjx_model, d), None
+
+        data, _ = jax.lax.scan(step, data, None, length=steps)
+        return data.qpos[2]
+
+    return jax.jit(jax.vmap(one))

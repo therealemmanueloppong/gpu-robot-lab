@@ -39,3 +39,18 @@ def test_time_fn_syncs_around_every_timed_call():
 def test_time_fn_rejects_bad_settings():
     with pytest.raises(ValueError):
         time_fn(lambda: None, iters=0)
+
+
+def test_summarize_reports_median_range_and_spread():
+    from gpu_robot_lab.bench import summarize
+
+    s = summarize([90.0, 100.0, 110.0])
+    assert (s.median, s.low, s.high) == (100.0, 90.0, 110.0)
+    assert s.spread_percent == pytest.approx(20.0)
+
+
+def test_summarize_needs_data():
+    from gpu_robot_lab.bench import summarize
+
+    with pytest.raises(ValueError):
+        summarize([])

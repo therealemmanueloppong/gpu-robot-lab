@@ -2,6 +2,8 @@
 
 [**Live explainer**](https://therealemmanueloppong.github.io/gpu-robot-lab/) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/therealemmanueloppong/gpu-robot-lab/blob/main/notebooks/colab_quickstart.ipynb)
 
+[![Run every experiment in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/therealemmanueloppong/gpu-robot-lab/blob/main/notebooks/all_experiments_colab.ipynb) (run everything, one zip of results)
+
 [![Open stage 2 in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/therealemmanueloppong/gpu-robot-lab/blob/main/notebooks/robot_sim_colab.ipynb) (robot simulation)
 
 GPU kernels written from scratch and benchmarked against PyTorch, then used to speed up a simulated robot. Built to run on a free shared GPU, so it costs nothing.
@@ -32,6 +34,9 @@ See [docs/PLAN.md](docs/PLAN.md) for the stages, the rules for what can be claim
 - `scripts/tune_matmul.py` and `scripts/plot_tuning.py` sweep launch settings and chart the best ones (GPU needed)
 - `scripts/plot_results.py` draws a results chart from a CSV
 - `src/gpu_robot_lab/sim.py` and `viz.py` the simulated pendulum, the parallel planner (cross-entropy method over MJX) and the GIF drawing (needs the `sim` and `plot` extras)
+- `scripts/repeat_bench.py` repeated benchmarks to measure run-to-run variation, `scripts/ablate_grouping.py` changes only the launch order to see if it helps, `scripts/profile_torch.py` shows what kernels PyTorch runs, and `scripts/inspect_kernel.py` also counts tensor-core instructions
+- `scripts/bench_planner.py` times the planner on CPU and GPU with compile time excluded, `scripts/bench_sim.py --model box` tests collisions and friction, `scripts/train_policy.py` trains a neural-network controller by evolution strategies (`src/gpu_robot_lab/policy.py`)
+- `notebooks/all_experiments_colab.ipynb` runs every experiment on a Colab GPU and downloads one zip of results
 - `scripts/run_swingup.py` plans and replays a swing-up, `scripts/bench_sim.py` compares CPU and parallel simulation speed, `notebooks/robot_sim_colab.ipynb` runs both on a Colab GPU
 - `docs/index.html` the interactive explainer
 - `notebooks/colab_quickstart.ipynb` runs all of the above on a free Colab GPU
@@ -134,11 +139,21 @@ The GIF at the top of this README is from the laptop CPU preview. The GIF from t
 
 Earlier CPU preview (laptop, 1,024 plans per iteration, 2.8 seconds, replay ended 0.498 m up): [results/cpu_preview/swingup.json](results/cpu_preview/swingup.json). Tests also check that the MJX simulator and plain MuJoCo agree to within 0.0001 radians over 200 steps, and that the motor alone cannot lift the pole.
 
-### Not yet measured
+### Experiments written and CPU-tested, waiting for a GPU run
 
-- Which part of v2 helps: the tile settings, or the grouped launch order. That needs one change at a time.
-- How much the results vary: each number above is from one run.
-- Why `torch.matmul` is still about 6 to 9 times faster at large sizes.
-- Whether the planner itself runs faster on a GPU for the same batch size (the speed test above measures raw simulation only).
-- Repeat runs of the stage 2 numbers, and a robot with contacts (such as a walking one).
-- A learned control policy for the robot. Stage 2 uses planning, not reinforcement learning.
+Everything below has code, tests that run on a CPU, and a cell in `notebooks/all_experiments_colab.ipynb`. None of it has GPU results yet, so no numbers are claimed.
+
+| Open question | Script | What it will show |
+|---|---|---|
+| Which part of v2 helps | `ablate_grouping.py` | Same tile settings, only the launch order changes (1, 2, 4, 8, 16) |
+| How much results vary | `repeat_bench.py` | Median and range over 10 repeats, versions taking turns |
+| Why PyTorch is still faster | `inspect_kernel.py`, `profile_torch.py` | Whether our kernel uses tensor cores (mma count) and what PyTorch runs |
+| Is the planner itself faster on a GPU | `bench_planner.py` | Seconds per iteration on CPU and GPU at the same batch size, compile excluded |
+| Robot with contacts | `bench_sim.py --model box` | Simulation speed with collisions and friction (a box dropped on the floor; not a walking robot) |
+| Stage 2 numbers repeated | `bench_sim.py` | Median and range over 5 repeats |
+| A learned policy | `train_policy.py` | A neural network trained by evolution strategies, replayed in plain MuJoCo from unseen starting angles |
+
+### Not done at all
+
+- A walking robot, and learning on a robot with many joints.
+- Reinforcement-learning algorithms such as PPO (the policy here is trained by evolution strategies).

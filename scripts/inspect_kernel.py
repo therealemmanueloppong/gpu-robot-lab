@@ -1,4 +1,8 @@
-"""Print register use, spills and shared memory for some v1 settings, to see why some are slow.
+"""Print register use, spills, shared memory and tensor-core use for some v1 settings.
+
+The last two columns count tensor-core (mma) and plain fused multiply-add (fma) instructions in the
+generated PTX code. Zero mma means the kernel is not using the GPU's matrix hardware at all, which
+would explain a large gap to PyTorch (whose library kernels do use it).
 
 Run on a GPU runtime:  python scripts/inspect_kernel.py
 A "spill" means the compiler ran out of registers and used slow memory instead. Values that
@@ -34,7 +38,7 @@ def main() -> int:
     a = torch.randn((n, n), device="cuda", dtype=torch.float16)
     b = torch.randn((n, n), device="cuda", dtype=torch.float16)
     c = torch.empty((n, n), device="cuda", dtype=torch.float16)
-    print(f"{'bm':>4} {'bn':>4} {'bk':>4} {'warps':>5} {'regs':>6} {'spills':>7} {'shared B':>9}")
+    print(f"{'bm':>4} {'bn':>4} {'bk':>4} {'warps':>5} {'regs':>6} {'spills':>7} {'shared B':>9} {'mma':>6} {'fma':>7}")
     for bm, bn, bk, warps in SETTINGS:
         grid = (triton.cdiv(n, bm), triton.cdiv(n, bn))
         compiled = _matmul_kernel[grid](
@@ -45,7 +49,11 @@ def main() -> int:
         regs = getattr(compiled, "n_regs", "n/a")
         spills = getattr(compiled, "n_spills", "n/a")
         shared = getattr(getattr(compiled, "metadata", None), "shared", "n/a")
-        print(f"{bm:>4} {bn:>4} {bk:>4} {warps:>5} {regs!s:>6} {spills!s:>7} {shared!s:>9}")
+        asm = getattr(compiled, "asm", None)
+        ptx = asm.get("ptx", "") if isinstance(asm, dict) else ""
+        mma = ptx.count("mma.") if ptx else "n/a"
+        fma = ptx.count("fma.rn") if ptx else "n/a"
+        print(f"{bm:>4} {bn:>4} {bk:>4} {warps:>5} {regs!s:>6} {spills!s:>7} {shared!s:>9} {mma!s:>6} {fma!s:>7}")
     return 0
 
 

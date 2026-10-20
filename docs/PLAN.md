@@ -25,7 +25,9 @@ What was built: a simulated pendulum whose motor is too weak to lift it directly
 
 Why planning instead of reinforcement learning: it has far fewer moving parts and library versions, so it can be tested on a CPU before any GPU time is used, and it uses the GPU in the same way (thousands of simultaneous simulations). A learned policy remains possible later.
 
-Remaining: add the GIF produced by the GPU run, repeat the measurements, and try a robot with contacts.
+Added after the first GPU run (code and CPU tests done; GPU results pending): repeated measurements, a collisions-and-friction test, a fair CPU versus GPU timing of the planner, and a learned neural-network policy trained by evolution strategies. `notebooks/all_experiments_colab.ipynb` runs them all and downloads one zip.
+
+Still not done: a walking robot, and reinforcement-learning algorithms such as PPO.
 
 ## Stage 3 (optional): use a custom kernel in the robot loop
 

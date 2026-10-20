@@ -57,3 +57,20 @@ def speedup(baseline_ms: float, candidate_ms: float) -> float:
     if candidate_ms <= 0:
         raise ValueError("candidate time must be positive")
     return baseline_ms / candidate_ms
+
+
+@dataclass(frozen=True)
+class Summary:
+    median: float
+    low: float
+    high: float
+    spread_percent: float  # (high - low) / median, in percent
+
+
+def summarize(samples: list[float]) -> Summary:
+    """Median, range and relative spread of repeated measurements."""
+    if not samples:
+        raise ValueError("need at least one sample")
+    median = statistics.median(samples)
+    low, high = min(samples), max(samples)
+    return Summary(median=median, low=low, high=high, spread_percent=100.0 * (high - low) / median if median else 0.0)

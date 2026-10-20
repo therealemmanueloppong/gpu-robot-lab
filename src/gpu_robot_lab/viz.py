@@ -70,3 +70,27 @@ def plot_scores(best_scores: list[float], final_heights: list[float], path: str 
     fig.savefig(out)
     plt.close(fig)
     return out
+
+
+def plot_training(mean_fitness: list[float], best_fitness: list[float], path: str | Path) -> Path:
+    """Learning curve of the evolution-strategies policy."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(6, 3.4), dpi=130)
+    x = np.arange(1, len(mean_fitness) + 1)
+    ax.plot(x, best_fitness, color="#2e9e6b", label="best candidate in the generation")
+    ax.plot(x, mean_fitness, color="#2a7ae2", label="average candidate")
+    ax.set_xlabel("Training iteration")
+    ax.set_ylabel("Fitness (higher is better)")
+    ax.set_title("A neural-network policy learns to swing up")
+    ax.grid(alpha=0.3)
+    ax.legend(loc="lower right", fontsize=8)
+    fig.tight_layout()
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out)
+    plt.close(fig)
+    return out
