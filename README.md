@@ -39,6 +39,8 @@ Kaggle notebooks also offer a free GPU and work the same way. Free-tier limits c
 
 ### Matrix multiply, first version (untuned), float16
 
+![Triton v1 versus torch.matmul on a Tesla T4](results/matmul_t4_2026-10-20.png)
+
 Measured on a Tesla T4 on Google Colab, 2026-10-20, with `python scripts/bench_matmul.py` (median of 50 runs after 10 warm-up runs). The package versions were not printed on this run, so the script now prints them. Raw data: [results/matmul_t4_2026-10-20.csv](results/matmul_t4_2026-10-20.csv).
 
 | Size | torch.matmul (GFLOPS) | Triton v1 (GFLOPS) | Triton speed vs torch |
