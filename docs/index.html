@@ -49,7 +49,7 @@
 </head>
 <body>
 <main>
-  <p><span class="chip">Early stage: tuned kernels reach about 11 to 17% of PyTorch; GPU robot simulation runs up to 129x faster than one CPU thread</span></p>
+  <p><span class="chip">Early stage: tuned kernels reach about 10 to 17% of PyTorch; GPU robot simulation runs up to 126x faster than one CPU thread</span></p>
   <h1>GPU Robot Lab</h1>
   <p class="muted">GPU kernels written from scratch and benchmarked against PyTorch, then used to speed up a simulated robot. This page explains the first kernel, a tiled matrix multiply, and shows what has been measured so far. <a href="https://github.com/therealemmanueloppong/gpu-robot-lab">Code on GitHub</a>.</p>
 
@@ -93,7 +93,11 @@
       <div class="stat">Row-bands of A plus column-bands of B needed by the shaded tiles<b id="need">0</b></div>
       <div class="stat">Same number for the plain row-by-row order<b id="needbase">0</b></div>
     </div>
-    <p class="muted" style="font-size:14px">Fewer is better. This illustrates the idea and the arithmetic (checked by tests in <code>tests/test_tiling.py</code>). Whether it speeds up the real kernel is measured on a GPU, not claimed here.</p>
+    <p class="muted" style="font-size:14px">Fewer is better. This illustrates the idea and the arithmetic (checked by tests in <code>tests/test_tiling.py</code>).</p>
+    <h3 style="font-size:17px;margin:20px 0 4px">Does it help the real kernel? Measured: yes, a little</h3>
+    <p class="muted" style="margin-top:0;font-size:15px">Same tile settings, only the launch order changes. Speed relative to the plain row-by-row order (group 1), median of 10 repeats on a Tesla T4.</p>
+    <table id="ablation"></table>
+    <p class="muted" style="font-size:14px">The grouped order is about 4 to 14 percent faster, best at a group size of 4 or 8, and a group of 16 gives little or nothing.</p>
   </div>
 
   <h2>3. What has been measured</h2>
@@ -101,7 +105,7 @@
   <div class="card">
     <svg id="chart" viewBox="0 0 720 350" role="img" aria-label="Line chart of throughput versus matrix size for torch.matmul and three Triton versions"></svg>
     <table id="table"></table>
-    <p class="muted" style="font-size:14px">At 2048 and 4096, v2 is about 3.4 times faster than the first kernel and 15 to 18 percent faster than the first kernel with the best sweep settings. It reaches 11 to 17 percent of PyTorch at those sizes. v2 changes several things at once, so this does not show which one helped. PyTorch's own speed changed between runs (17,606 and 32,751 GFLOPS at 2048), so percentages move; compare versions within one run.</p>
+    <p class="muted" style="font-size:14px">Repeated 10 times, v2 is about 3.4 times faster than the first kernel at 2048 and 3.5 times at 4096 (2.4 times at 1024, where the first kernel with the best sweep settings is faster than v2). It is 13 to 19 percent faster than the first kernel with the best sweep settings. Our kernels repeat closely, but PyTorch's own speed varies by 8 to 44 percent on the shared GPU, so the percentage of PyTorch moves between runs (10 to 17 percent here). The table and chart show one run; compare versions within a run.</p>
   </div>
 
   <h2>Why the first kernel was slow</h2>
@@ -118,19 +122,46 @@
     <p class="muted" style="font-size:14px">Registers and spills come from the compiler for each setting. Speeds come from the 135-setting sweep (torch.matmul ran at 18,505 GFLOPS in that run). The link between spills and speed is a strong pattern, not a controlled proof. Pipeline stages hardly mattered (3,045, 3,036 and 3,035 GFLOPS).</p>
   </div>
 
+  <h2>Why PyTorch is still faster</h2>
+  <p>The compiled code of every kernel setting we tried contains <b>zero tensor-core instructions</b>. It does its arithmetic with ordinary fused multiply-adds. PyTorch instead runs one library kernel, <code>turing_fp16_s1688gemm_fp16_128x128_ldg8_f2f_nn</code>, which takes 0.946 ms per call at 2048 (about 18,200 GFLOPS).</p>
+  <div class="card">
+    <table><tr><th>Setting (tile, warps)</th><th>tensor-core instructions</th><th>plain multiply-adds</th></tr>
+      <tr><td>64x64x32, 4 warps</td><td>0</td><td>1,024</td></tr>
+      <tr><td>64x64x16, 4 warps</td><td>0</td><td>512</td></tr>
+      <tr><td>64x64x16, 8 warps</td><td>0</td><td>256</td></tr>
+      <tr><td>128x64x16, 8 warps</td><td>0</td><td>512</td></tr>
+    </table>
+    <p class="muted" style="font-size:14px">This is the most likely main reason for the 6 to 10 times gap, but it is not proven: the kernel was not forced onto the tensor cores to see the change. Why Triton 3.6 produced plain multiply-adds on this older T4 is unknown, and a newer GPU was not tested. The <code>s1688</code> in PyTorch's kernel name refers to a tensor-core instruction shape; that was read from the name, not checked against NVIDIA's documentation.</p>
+  </div>
+
   <h2>4. A robot, simulated in parallel</h2>
   <p>The same idea of doing many things at once applies to robots. The pendulum below has a motor too weak to lift it, so it must swing back and forth to reach the top. A planner tries thousands of motor plans at the same time in a simulator, keeps the best, and repeats. The final plan is then replayed in a separate simulator as a check.</p>
   <div class="card" style="text-align:center">
-    <img src="swingup_cpu_preview.gif" alt="A pendulum swinging back and forth until it reaches the top" width="288" height="288" style="max-width:100%;height:auto">
-    <p class="muted" style="font-size:14px;text-align:left">Preview GIF, planned from 1,024 parallel simulations on a laptop CPU in 2.8 seconds. The same planner also found a swing-up on a Colab GPU (4,096 plans per iteration): the replay in plain MuJoCo ended 0.494 m above the hinge, where the top is 0.5 m.</p>
+    <img src="swingup_gpu.gif" alt="A pendulum swinging back and forth until it reaches the top, planned on a GPU" width="288" height="288" style="max-width:100%;height:auto">
+    <p class="muted" style="font-size:14px;text-align:left">Planned on a Tesla T4 from 4,096 parallel simulations per iteration in 6.1 seconds (including compile time). Replayed in plain MuJoCo, the pole tip ended 0.494 m above the hinge, where the top is 0.5 m.</p>
   </div>
 
   <h3 style="font-size:17px;margin:24px 0 4px">How much faster is the GPU?</h3>
-  <p class="muted" style="margin-top:0">Simulation steps per second for a pendulum, on a Tesla T4 (2026-10-20), compared with one CPU thread (366,143 steps per second).</p>
+  <p class="muted" style="margin-top:0">Simulation steps per second for a pendulum, on a Tesla T4 (2026-10-20), median of 5 repeats, compared with one CPU thread (360,612 steps per second).</p>
   <div class="card">
     <svg id="simbars" viewBox="0 0 720 270" role="img" aria-label="Bar chart of GPU simulation speed relative to one CPU thread for different numbers of robots"></svg>
     <table id="simtable"></table>
-    <p class="muted" style="font-size:14px">For a single robot the GPU is about 50 times slower than the CPU. It pulls ahead at around a hundred robots and reaches 129 times at 16,384, which is why GPUs matter when learning needs thousands of simulated robots. Limits: a pendulum is very cheap to simulate, the CPU baseline is one thread, and these come from one run.</p>
+    <p class="muted" style="font-size:14px">For a single robot the GPU is about 50 times slower than the CPU. It pulls ahead at around a hundred robots and reaches 126 times at 16,384. An earlier single run gave 129 times. Limits: a pendulum is very cheap to simulate, and the CPU baseline is one thread.</p>
+  </div>
+
+
+  <h3 style="font-size:17px;margin:24px 0 4px">With collisions the picture changes</h3>
+  <p class="muted" style="margin-top:0">A box dropped on the floor (collisions and friction), same test. One CPU thread = 139,592 steps per second.</p>
+  <div class="card">
+    <table id="boxtable"></table>
+    <p class="muted" style="font-size:14px">The GPU only breaks even at about 1,000 boxes and reaches 2.75 times at 4,096, compared with 82 times for the pendulum at the same count. When each step is more expensive, the GPU's advantage shrinks a lot, so the pendulum numbers are not typical for real robots. Larger batches were not tested, and this box is not a walking robot.</p>
+  </div>
+
+  <h3 style="font-size:17px;margin:24px 0 4px">Is the planner itself faster on a GPU?</h3>
+  <p class="muted" style="margin-top:0">Seconds per planner iteration at the same batch size, compile time excluded.</p>
+  <div class="card">
+    <table id="plantable"></table>
+    <p class="muted" style="font-size:14px">Yes. The GPU is 2 to 26 times faster per iteration, and its time barely grows with the batch while the CPU's grows in proportion. Both found the same final heights. One run, against Colab's CPU.</p>
   </div>
 
   <h2>5. A controller that learned</h2>
@@ -138,7 +169,7 @@
   <div class="card" style="text-align:center">
     <img src="policy_swingup_cpu_preview.gif" alt="A pole swinging up and held upright by a learned controller" width="288" height="288" style="max-width:100%;height:auto">
     <img src="policy_curve_cpu_preview.png" alt="Learning curve with dotted lines where each training stage begins" style="max-width:100%;height:auto;margin-top:8px">
-    <p class="muted" style="font-size:14px;text-align:left">Trained on a laptop CPU in 130 seconds. Replayed in plain MuJoCo from five starting angles, including hanging straight down, it swung the pole up and held it at the top every time. Two earlier versions failed: one learned to swing up but kept spinning past the top, another learned to balance and then forgot. A five-stage curriculum, from nearly upright to hanging down, fixed it. This is a CPU run on one pendulum with one random seed, and has not been run on a GPU.</p>
+    <p class="muted" style="font-size:14px;text-align:left">Trained on a laptop CPU in about 130 seconds with 512 candidates per iteration. Replayed in plain MuJoCo from five starting angles, including hanging straight down, it swung the pole up and held it every time, and the same happened with 3 different random seeds. But with more candidates it failed: a 2,048-candidate run on the CPU and a 4,096-candidate run on the GPU both ended with the pole rocking near the bottom, so the problem follows the population size, not the device. The cause is not found, and each larger size was run once. Two earlier versions also failed, and a five-stage curriculum, from nearly upright to hanging down, fixed the 512-candidate runs. One pendulum, evolution strategies, and the GIF is from a CPU run.</p>
   </div>
 
   <h2>6. What is next</h2>
@@ -274,7 +305,7 @@
   drawOrder();
 
   /* stage 2 speed test, from results/stage2_gpu/sim_results_t4_2026-10-20.csv */
-  var sim = [[1, 8830, 0.02], [16, 148432, 0.41], [256, 3404911, 9.3], [1024, 11117399, 30.36], [4096, 28721673, 78.44], [16384, 47090112, 128.61]];
+  var sim = [[1, 7280, 0.02], [16, 197960, 0.55], [256, 2052932, 5.69], [1024, 7531437, 20.89], [4096, 29671925, 82.28], [16384, 45555479, 126.33]];
   var sb = $('simbars'), SL = 130, SR = 600, smax = 140;
   sim.forEach(function (r, i) {
     var y = 14 + i * 40, w = Math.max(2, r[2] / smax * (SR - SL));
@@ -287,6 +318,23 @@
   var st = '<tr><th>Robots</th><th>GPU steps per second</th><th>vs one CPU thread</th></tr>';
   sim.forEach(function (r) { st += '<tr><td>' + fmt(r[0]) + '</td><td>' + fmt(r[1]) + '</td><td>' + (r[2] < 1 ? r[2].toFixed(2) : Math.round(r[2])) + 'x</td></tr>'; });
   $('simtable').innerHTML = st;
+
+  /* ablation, box and planner tables, from results/full_run_2026-10-20 */
+  var ab = '<tr><th>Tile, warps, size</th><th>Group 1 (GFLOPS)</th><th>2</th><th>4</th><th>8</th><th>16</th></tr>' +
+    '<tr><td>64x64x16, 4 warps, 2048</td><td>3,229</td><td>1.04x</td><td>1.08x</td><td><b>1.11x</b></td><td>1.06x</td></tr>' +
+    '<tr><td>64x64x16, 4 warps, 4096</td><td>3,004</td><td>1.08x</td><td><b>1.14x</b></td><td>1.13x</td><td>1.00x</td></tr>' +
+    '<tr><td>64x128x16, 8 warps, 2048</td><td>3,474</td><td>0.99x</td><td>1.02x</td><td><b>1.04x</b></td><td>1.00x</td></tr>' +
+    '<tr><td>64x128x16, 8 warps, 4096</td><td>3,203</td><td>1.06x</td><td>1.09x</td><td><b>1.10x</b></td><td>1.08x</td></tr>';
+  $('ablation').innerHTML = ab;
+  var bx = [[1, 735, 0.01], [16, 5993, 0.04], [256, 54690, 0.39], [1024, 150085, 1.08], [4096, 383643, 2.75]];
+  var bt = '<tr><th>Boxes</th><th>GPU steps per second</th><th>vs one CPU thread</th><th>Pendulum, same count</th></tr>';
+  var pend = {1: '0.02x', 16: '0.55x', 256: '5.7x', 1024: '21x', 4096: '82x'};
+  bx.forEach(function (r) { bt += '<tr><td>' + fmt(r[0]) + '</td><td>' + fmt(r[1]) + '</td><td>' + r[2].toFixed(2) + 'x</td><td>' + pend[r[0]] + '</td></tr>'; });
+  $('boxtable').innerHTML = bt;
+  var pl = [[256, 0.0792, 0.0354], [1024, 0.3506, 0.0401], [4096, 1.5134, 0.0573]];
+  var pt = '<tr><th>Plans per iteration</th><th>CPU (s)</th><th>GPU (s)</th><th>GPU speed-up</th></tr>';
+  pl.forEach(function (r) { pt += '<tr><td>' + fmt(r[0]) + '</td><td>' + r[1].toFixed(4) + '</td><td>' + r[2].toFixed(4) + '</td><td>' + (r[1] / r[2]).toFixed(1) + 'x</td></tr>'; });
+  $('plantable').innerHTML = pt;
 
   /* tuning bars, from the 2026-10-20 sweep output */
   var bars = [

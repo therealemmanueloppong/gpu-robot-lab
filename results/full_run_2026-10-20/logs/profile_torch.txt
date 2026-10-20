@@ -1,0 +1,4 @@
+/usr/local/lib/python3.13/dist-packages/torch/profiler/profiler.py:224: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+GPU kernels run by torch.matmul at 2048 x 2048, float16 (10 calls):
+  0.946 ms per call  x10  turing_fp16_s1688gemm_fp16_128x128_ldg8_f2f_nn

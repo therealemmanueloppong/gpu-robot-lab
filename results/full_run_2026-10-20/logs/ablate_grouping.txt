@@ -1,0 +1,22 @@
+GPU: Tesla T4, 10 repeats
+{'size': 2048, 'tile': '64x64x16', 'warps': 4, 'group_m': 1, 'median_gflops': 3229.4, 'min_gflops': 1838.2, 'max_gflops': 3253.9, 'vs_group1': 1.0}
+{'size': 2048, 'tile': '64x64x16', 'warps': 4, 'group_m': 2, 'median_gflops': 3351.0, 'min_gflops': 3312.3, 'max_gflops': 3432.3, 'vs_group1': 1.038}
+{'size': 2048, 'tile': '64x64x16', 'warps': 4, 'group_m': 4, 'median_gflops': 3494.1, 'min_gflops': 3466.1, 'max_gflops': 3538.8, 'vs_group1': 1.082}
+{'size': 2048, 'tile': '64x64x16', 'warps': 4, 'group_m': 8, 'median_gflops': 3582.6, 'min_gflops': 3549.1, 'max_gflops': 3665.3, 'vs_group1': 1.109}
+{'size': 2048, 'tile': '64x64x16', 'warps': 4, 'group_m': 16, 'median_gflops': 3407.4, 'min_gflops': 3399.2, 'max_gflops': 3416.3, 'vs_group1': 1.055}
+{'size': 2048, 'tile': '64x128x16', 'warps': 8, 'group_m': 1, 'median_gflops': 3474.4, 'min_gflops': 3458.9, 'max_gflops': 3563.7, 'vs_group1': 1.0}
+{'size': 2048, 'tile': '64x128x16', 'warps': 8, 'group_m': 2, 'median_gflops': 3451.3, 'min_gflops': 3430.8, 'max_gflops': 3527.6, 'vs_group1': 0.993}
+{'size': 2048, 'tile': '64x128x16', 'warps': 8, 'group_m': 4, 'median_gflops': 3526.0, 'min_gflops': 3430.3, 'max_gflops': 3554.8, 'vs_group1': 1.015}
+{'size': 2048, 'tile': '64x128x16', 'warps': 8, 'group_m': 8, 'median_gflops': 3608.2, 'min_gflops': 3583.8, 'max_gflops': 3619.4, 'vs_group1': 1.039}
+{'size': 2048, 'tile': '64x128x16', 'warps': 8, 'group_m': 16, 'median_gflops': 3491.6, 'min_gflops': 3463.9, 'max_gflops': 3603.5, 'vs_group1': 1.005}
+{'size': 4096, 'tile': '64x64x16', 'warps': 4, 'group_m': 1, 'median_gflops': 3004.3, 'min_gflops': 2965.2, 'max_gflops': 3135.0, 'vs_group1': 1.0}
+{'size': 4096, 'tile': '64x64x16', 'warps': 4, 'group_m': 2, 'median_gflops': 3233.3, 'min_gflops': 3218.1, 'max_gflops': 3355.7, 'vs_group1': 1.076}
+{'size': 4096, 'tile': '64x64x16', 'warps': 4, 'group_m': 4, 'median_gflops': 3411.1, 'min_gflops': 3380.2, 'max_gflops': 3501.3, 'vs_group1': 1.135}
+{'size': 4096, 'tile': '64x64x16', 'warps': 4, 'group_m': 8, 'median_gflops': 3382.3, 'min_gflops': 3242.4, 'max_gflops': 3469.4, 'vs_group1': 1.126}
+{'size': 4096, 'tile': '64x64x16', 'warps': 4, 'group_m': 16, 'median_gflops': 3009.9, 'min_gflops': 2982.5, 'max_gflops': 3119.6, 'vs_group1': 1.002}
+{'size': 4096, 'tile': '64x128x16', 'warps': 8, 'group_m': 1, 'median_gflops': 3203.4, 'min_gflops': 3164.5, 'max_gflops': 3259.8, 'vs_group1': 1.0}
+{'size': 4096, 'tile': '64x128x16', 'warps': 8, 'group_m': 2, 'median_gflops': 3393.6, 'min_gflops': 3344.7, 'max_gflops': 3416.6, 'vs_group1': 1.059}
+{'size': 4096, 'tile': '64x128x16', 'warps': 8, 'group_m': 4, 'median_gflops': 3479.8, 'min_gflops': 3435.4, 'max_gflops': 3496.3, 'vs_group1': 1.086}
+{'size': 4096, 'tile': '64x128x16', 'warps': 8, 'group_m': 8, 'median_gflops': 3516.7, 'min_gflops': 3490.7, 'max_gflops': 3528.3, 'vs_group1': 1.098}
+{'size': 4096, 'tile': '64x128x16', 'warps': 8, 'group_m': 16, 'median_gflops': 3461.6, 'min_gflops': 3379.6, 'max_gflops': 3504.0, 'vs_group1': 1.081}
+Saved ablation_results.csv

@@ -1,0 +1,6 @@
+model,batch,device,mjx_steps_per_s,mjx_min,mjx_max,cpu_steps_per_s,speedup_vs_cpu_1_thread
+box,1,gpu,735,729,735,139592,0.01
+box,16,gpu,5993,5977,6011,139592,0.04
+box,256,gpu,54690,54524,54783,139592,0.39
+box,1024,gpu,150085,149942,150132,139592,1.08
+box,4096,gpu,383643,381123,386846,139592,2.75

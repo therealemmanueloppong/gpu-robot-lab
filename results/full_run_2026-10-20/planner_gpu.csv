@@ -1,0 +1,4 @@
+device,batch,iterations,seconds_per_iteration,final_height,success
+gpu,256,10,0.0354,0.39,False
+gpu,1024,10,0.0401,0.492,True
+gpu,4096,10,0.0573,0.494,True

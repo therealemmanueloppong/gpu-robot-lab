@@ -1,0 +1,4 @@
+device,batch,iterations,seconds_per_iteration,final_height,success
+cpu,256,10,0.0792,0.39,False
+cpu,1024,10,0.3506,0.492,True
+cpu,4096,10,1.5134,0.494,True

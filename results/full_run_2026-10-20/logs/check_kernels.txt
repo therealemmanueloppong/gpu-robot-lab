@@ -1,0 +1,12 @@
+matmul  64x64 @ 64x64: max abs error 0.0001  PASS
+matmul2 64x64 @ 64x64: PASS
+matmul  100x130 @ 130x77: max abs error 0.0078  PASS
+matmul2 100x130 @ 130x77: PASS
+matmul  512x512 @ 512x512: max abs error 0.0312  PASS
+matmul2 512x512 @ 512x512: PASS
+matmul  1000x1000 @ 1000x1000: max abs error 0.0625  PASS
+matmul2 1000x1000 @ 1000x1000: PASS
+softmax 1x10: PASS
+softmax 128x257: PASS
+softmax 1024x1000: PASS
+ALL PASSED

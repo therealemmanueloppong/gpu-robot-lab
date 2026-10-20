@@ -3,7 +3,8 @@
 Training uses a curriculum: balance near the top first, then recover from bigger and bigger leans, ending
 with a swing-up from the bottom. ``--iterations`` is per stage (5 stages).
 
-Run on a GPU runtime for the big population:  python scripts/train_policy.py --population 4096 --iterations 40
+Settings that worked in 3 of 3 runs:  python scripts/train_policy.py --population 512 --iterations 30
+Runs with 2048 (CPU) and 4096 (GPU) candidates failed (see the README).
 Writes results/policy/policy.json, policy_curve.png, policy_swingup.gif and policy_params.npy.
 """
 from __future__ import annotations
@@ -19,8 +20,8 @@ import numpy as np
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--population", type=int, default=2048)
-    parser.add_argument("--iterations", type=int, default=40, help="iterations per curriculum stage")
+    parser.add_argument("--population", type=int, default=512, help="candidates per iteration (512 worked in 3 of 3 runs; 2048 and 4096 each failed once)")
+    parser.add_argument("--iterations", type=int, default=30, help="iterations per curriculum stage")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out", type=Path, default=Path("results/policy"))
     args = parser.parse_args()

@@ -1,0 +1,12 @@
+JAX device: gpu (Tesla T4); jax 0.11.1; mujoco 3.16.0
+Failed to import warp: No module named 'warp'
+Failed to import mujoco_warp: No module named 'warp'
+CPU, 1 thread, pendulum: 360,612 steps per second
+
+{'model': 'pendulum', 'batch': 1, 'device': 'gpu', 'mjx_steps_per_s': 7280, 'mjx_min': 7260, 'mjx_max': 14871, 'cpu_steps_per_s': 360612, 'speedup_vs_cpu_1_thread': 0.02}
+{'model': 'pendulum', 'batch': 16, 'device': 'gpu', 'mjx_steps_per_s': 197960, 'mjx_min': 129794, 'mjx_max': 200898, 'cpu_steps_per_s': 360612, 'speedup_vs_cpu_1_thread': 0.55}
+{'model': 'pendulum', 'batch': 256, 'device': 'gpu', 'mjx_steps_per_s': 2052932, 'mjx_min': 1976789, 'mjx_max': 3227746, 'cpu_steps_per_s': 360612, 'speedup_vs_cpu_1_thread': 5.69}
+{'model': 'pendulum', 'batch': 1024, 'device': 'gpu', 'mjx_steps_per_s': 7531437, 'mjx_min': 6471654, 'mjx_max': 10609687, 'cpu_steps_per_s': 360612, 'speedup_vs_cpu_1_thread': 20.89}
+{'model': 'pendulum', 'batch': 4096, 'device': 'gpu', 'mjx_steps_per_s': 29671925, 'mjx_min': 15821959, 'mjx_max': 32296095, 'cpu_steps_per_s': 360612, 'speedup_vs_cpu_1_thread': 82.28}
+{'model': 'pendulum', 'batch': 16384, 'device': 'gpu', 'mjx_steps_per_s': 45555479, 'mjx_min': 45401818, 'mjx_max': 45616078, 'cpu_steps_per_s': 360612, 'speedup_vs_cpu_1_thread': 126.33}
+Saved sim_results.csv

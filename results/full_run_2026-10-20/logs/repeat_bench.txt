@@ -1,0 +1,14 @@
+GPU: Tesla T4, 10 repeats
+{'size': 1024, 'version': 'torch.matmul', 'median_gflops': 25474.3, 'min_gflops': 24967.0, 'max_gflops': 26870.8, 'spread_percent': 7.5, 'vs_torch_median': 1.0}
+{'size': 1024, 'version': 'v1 default', 'median_gflops': 1199.1, 'min_gflops': 1181.7, 'max_gflops': 1208.1, 'spread_percent': 2.2, 'vs_torch_median': 0.047}
+{'size': 1024, 'version': 'v1 best swept settings', 'median_gflops': 3433.1, 'min_gflops': 3195.7, 'max_gflops': 3500.9, 'spread_percent': 8.9, 'vs_torch_median': 0.135}
+{'size': 1024, 'version': 'v2 autotuned', 'median_gflops': 2828.7, 'min_gflops': 2779.6, 'max_gflops': 2955.7, 'spread_percent': 6.2, 'vs_torch_median': 0.111}
+{'size': 2048, 'version': 'torch.matmul', 'median_gflops': 35737.1, 'min_gflops': 32651.9, 'max_gflops': 39032.6, 'spread_percent': 17.9, 'vs_torch_median': 1.0}
+{'size': 2048, 'version': 'v1 default', 'median_gflops': 1095.8, 'min_gflops': 1090.6, 'max_gflops': 1097.6, 'spread_percent': 0.6, 'vs_torch_median': 0.031}
+{'size': 2048, 'version': 'v1 best swept settings', 'median_gflops': 3308.5, 'min_gflops': 3291.6, 'max_gflops': 3385.1, 'spread_percent': 2.8, 'vs_torch_median': 0.093}
+{'size': 2048, 'version': 'v2 autotuned', 'median_gflops': 3727.0, 'min_gflops': 3682.8, 'max_gflops': 3786.5, 'spread_percent': 2.8, 'vs_torch_median': 0.104}
+{'size': 4096, 'version': 'torch.matmul', 'median_gflops': 21414.1, 'min_gflops': 20359.4, 'max_gflops': 29866.5, 'spread_percent': 44.4, 'vs_torch_median': 1.0}
+{'size': 4096, 'version': 'v1 default', 'median_gflops': 1072.1, 'min_gflops': 1071.6, 'max_gflops': 1072.4, 'spread_percent': 0.1, 'vs_torch_median': 0.05}
+{'size': 4096, 'version': 'v1 best swept settings', 'median_gflops': 3125.6, 'min_gflops': 3024.4, 'max_gflops': 3231.4, 'spread_percent': 6.6, 'vs_torch_median': 0.146}
+{'size': 4096, 'version': 'v2 autotuned', 'median_gflops': 3729.1, 'min_gflops': 3642.0, 'max_gflops': 3814.5, 'spread_percent': 4.6, 'vs_torch_median': 0.174}
+Saved repeat_results.csv

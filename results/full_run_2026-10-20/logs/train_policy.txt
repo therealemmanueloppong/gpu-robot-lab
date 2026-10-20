@@ -1,0 +1,16 @@
+JAX device: gpu (Tesla T4)
+Failed to import warp: No module named 'warp'
+Failed to import mujoco_warp: No module named 'warp'
+Training took 188.4 s (4096 candidates x 200 iterations in 5 stages)
+  iteration   40: average fitness +3.95, best +4.00
+  iteration   80: average fitness +2.73, best +2.82
+  iteration  120: average fitness +2.14, best +2.20
+  iteration  160: average fitness +1.32, best +1.34
+  iteration  200: average fitness +0.64, best +0.66
+  replay from start angle -0.5: failed (mean tip height over the last second -0.444 m, top is 0.5)
+  replay from start angle -0.2: failed (mean tip height over the last second -0.460 m, top is 0.5)
+  replay from start angle +0.0: failed (mean tip height over the last second -0.465 m, top is 0.5)
+  replay from start angle +0.2: failed (mean tip height over the last second -0.455 m, top is 0.5)
+  replay from start angle +0.5: failed (mean tip height over the last second -0.337 m, top is 0.5)
+0 of 5 replays reached and held the top
+Saved results/policy/policy.json, policy_curve.png, policy_swingup.gif, policy_params.npy

@@ -1,0 +1,7 @@
+JAX device: cpu (cpu)
+Failed to import warp: No module named 'warp'
+Failed to import mujoco_warp: No module named 'warp'
+{'device': 'cpu', 'batch': 256, 'iterations': 10, 'seconds_per_iteration': 0.0792, 'final_height': 0.39, 'success': False}
+{'device': 'cpu', 'batch': 1024, 'iterations': 10, 'seconds_per_iteration': 0.3506, 'final_height': 0.492, 'success': True}
+{'device': 'cpu', 'batch': 4096, 'iterations': 10, 'seconds_per_iteration': 1.5134, 'final_height': 0.494, 'success': True}
+Saved planner_cpu.csv

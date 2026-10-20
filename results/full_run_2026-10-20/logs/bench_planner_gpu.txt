@@ -1,0 +1,7 @@
+JAX device: gpu (Tesla T4)
+Failed to import warp: No module named 'warp'
+Failed to import mujoco_warp: No module named 'warp'
+{'device': 'gpu', 'batch': 256, 'iterations': 10, 'seconds_per_iteration': 0.0354, 'final_height': 0.39, 'success': False}
+{'device': 'gpu', 'batch': 1024, 'iterations': 10, 'seconds_per_iteration': 0.0401, 'final_height': 0.492, 'success': True}
+{'device': 'gpu', 'batch': 4096, 'iterations': 10, 'seconds_per_iteration': 0.0573, 'final_height': 0.494, 'success': True}
+Saved planner_gpu.csv

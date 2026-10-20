@@ -1,4 +1,4 @@
-# GPU Robot Lab plan
+# GPU Robot Lab plan and status
 
 ## Goal
 
@@ -6,43 +6,47 @@ Write GPU kernels from scratch, measure them honestly against PyTorch, and then 
 
 ## Rules for claims
 
-Only claim what was measured and can be reproduced from this repo. Every number in the README names the GPU, the date and the command that produced it. If a kernel is slower than PyTorch, the README says so and explains why.
+Only claim what was measured and can be reproduced from this repo. Every number in the README names the GPU, the date and the command that produced it. If a kernel is slower than PyTorch, or an experiment fails, the README says so.
 
-## Stage 1: kernels in Triton (Python)
+## Status: first complete version (2026-10-20)
 
-1. Tiled matrix multiply, checked against `torch.matmul` for correctness, then timed.
-2. Row-wise softmax.
-3. Tuning: try different tile sizes and measure the effect of each change, one at a time.
-4. Fused softmax and a small attention kernel.
+Stage 1 and stage 2 are finished and measured on a Colab T4. The full results, with the raw logs, are in the README and in `results/full_run_2026-10-20/`.
 
-Done when: `scripts/check_kernels.py` passes on a GPU and `scripts/bench_matmul.py` produces a results table.
+### Stage 1: kernels in Triton (done)
 
-## Stage 2: robot simulation on the GPU
+- Matrix multiply (v1 and an autotuned v2) and row-wise softmax, all checked against PyTorch.
+- The first kernel reached about 4% of `torch.matmul`. A 135-setting sweep and compiler output showed it was spilling registers (255 registers, 84 spills). Tuned versions run about 3.4 times faster.
+- A launch order that groups tiles gives another 4 to 14%.
+- The compiled kernels contain no tensor-core instructions, while PyTorch runs a tensor-core library kernel. This is the likely main reason for the remaining 6 to 10 times gap, but it was not tested by forcing the tensor cores.
+- Not done: a fused softmax and a small attention kernel (the original step 4).
 
-Status: built, verified on a CPU, and measured on a Colab T4 (up to 129 times the simulation steps per second of one CPU thread at 16,384 robots; swing-up found on the GPU).
+### Stage 2: robot simulation (done)
 
-What was built: a simulated pendulum whose motor is too weak to lift it directly, so it has to swing. A planner tries thousands of motor plans at once in MuJoCo's GPU-capable simulator (MJX), keeps the best, and repeats (the cross-entropy method). The best plan is replayed in plain MuJoCo as an independent check, then drawn as a GIF. `scripts/bench_sim.py` compares one CPU thread against many robots at once.
+- A simulated pendulum with a motor too weak to lift it. A planner tries thousands of motor plans at once in MuJoCo MJX and finds a swing-up, checked by an independent replay.
+- MJX on the GPU simulates up to about 126 times more steps per second than one CPU thread (pendulum). With collisions (a dropped box) the advantage shrinks to 2.75 times at 4,096 boxes.
+- The planner itself is 2 to 26 times faster per iteration on the GPU at the same batch size.
+- A neural-network controller trained by evolution strategies with a curriculum swings the pole up and holds it. See the README for the exact outcomes, including a failed run.
 
-Why planning instead of reinforcement learning: it has far fewer moving parts and library versions, so it can be tested on a CPU before any GPU time is used, and it uses the GPU in the same way (thousands of simultaneous simulations). A learned policy remains possible later.
+### Stage 3 (dropped)
 
-Added after the first GPU run (code and CPU tests done; GPU results pending): repeated measurements, a collisions-and-friction test, a fair CPU versus GPU timing of the planner, and a learned neural-network policy trained by evolution strategies. `notebooks/all_experiments_colab.ipynb` runs them all and downloads one zip.
+A fused policy kernel inside the robot loop was optional and was not attempted.
 
-Still not done: a walking robot, and reinforcement-learning algorithms such as PPO.
+## If this is continued
 
-## Stage 3 (optional): use a custom kernel in the robot loop
-
-Decide after stage 2, depending on what works on the free tier. The idea is a fused kernel for the policy network, benchmarked in the rollout loop. If the simulator and Triton do not combine cleanly, stage 3 is dropped and the repo stays honest about it.
+1. Force the matrix-multiply kernel onto the tensor cores, or try a newer GPU, and measure the change.
+2. Make the learned controller train reliably at larger population sizes.
+3. Move from a pendulum to a robot with legs, and from evolution strategies to PPO.
+4. Repeat the measurements to tighten the error bars, since a shared GPU varies from run to run.
 
 ## Where things run
 
 | What | Where | Cost |
 |---|---|---|
-| Unit tests, linting, CI | Your laptop, a Codespace, GitHub Actions | free |
-| Kernel checks and benchmarks | Google Colab (or Kaggle) with a GPU runtime | free, with usage limits that change |
-| Real hardware (Jetson, robot kit) | Not used. Possible later if funded | not needed |
+| Unit tests, linting, CI | A laptop, a Codespace, GitHub Actions | free |
+| Kernel checks, benchmarks, robot experiments | Google Colab with a GPU runtime (`notebooks/all_experiments_colab.ipynb`) | free, with usage limits that change |
 
 ## Risks
 
-- Free GPU time is limited and a session can be reclaimed. Save results to the repo (CSV files) as they are produced.
-- The Triton kernels in this scaffold have not yet been run on a GPU. Stage 1 starts with that.
-- Triton and simulator versions on Colab change. Pin the versions that worked once they are known.
+- Free GPU time is limited and a session can be reclaimed.
+- Results on a shared GPU vary from run to run (PyTorch's own speed varied by up to 44% between repeats).
+- Triton and simulator versions on Colab change. Versions used: torch 2.11.0, triton 3.6.0, CUDA 13.0, jax 0.11.1, mujoco 3.16.0.

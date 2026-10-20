@@ -1,0 +1,11 @@
+JAX device: gpu (Tesla T4); jax 0.11.1; mujoco 3.16.0
+Failed to import warp: No module named 'warp'
+Failed to import mujoco_warp: No module named 'warp'
+CPU, 1 thread, box: 139,592 steps per second
+
+{'model': 'box', 'batch': 1, 'device': 'gpu', 'mjx_steps_per_s': 735, 'mjx_min': 729, 'mjx_max': 735, 'cpu_steps_per_s': 139592, 'speedup_vs_cpu_1_thread': 0.01}
+{'model': 'box', 'batch': 16, 'device': 'gpu', 'mjx_steps_per_s': 5993, 'mjx_min': 5977, 'mjx_max': 6011, 'cpu_steps_per_s': 139592, 'speedup_vs_cpu_1_thread': 0.04}
+{'model': 'box', 'batch': 256, 'device': 'gpu', 'mjx_steps_per_s': 54690, 'mjx_min': 54524, 'mjx_max': 54783, 'cpu_steps_per_s': 139592, 'speedup_vs_cpu_1_thread': 0.39}
+{'model': 'box', 'batch': 1024, 'device': 'gpu', 'mjx_steps_per_s': 150085, 'mjx_min': 149942, 'mjx_max': 150132, 'cpu_steps_per_s': 139592, 'speedup_vs_cpu_1_thread': 1.08}
+{'model': 'box', 'batch': 4096, 'device': 'gpu', 'mjx_steps_per_s': 383643, 'mjx_min': 381123, 'mjx_max': 386846, 'cpu_steps_per_s': 139592, 'speedup_vs_cpu_1_thread': 2.75}
+Saved sim_results_box.csv
