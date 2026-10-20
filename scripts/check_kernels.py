@@ -13,6 +13,7 @@ def main() -> int:
     import torch
 
     from gpu_robot_lab.kernels.matmul import matmul
+    from gpu_robot_lab.kernels.matmul_v2 import matmul_v2
     from gpu_robot_lab.kernels.softmax import softmax
 
     torch.manual_seed(0)
@@ -25,6 +26,9 @@ def main() -> int:
         ok = torch.allclose(matmul(a, b), a @ b, rtol=1e-2, atol=1e-1)
         failures += not ok
         print(f"matmul  {m}x{k} @ {k}x{n}: max abs error {err:.4f}  {'PASS' if ok else 'FAIL'}")
+        ok2 = torch.allclose(matmul_v2(a, b), a @ b, rtol=1e-2, atol=1e-1)
+        failures += not ok2
+        print(f"matmul2 {m}x{k} @ {k}x{n}: {'PASS' if ok2 else 'FAIL'}")
 
     for rows, cols in [(1, 10), (128, 257), (1024, 1000)]:
         x = torch.randn((rows, cols), device="cuda", dtype=torch.float32)

@@ -41,6 +41,9 @@
   th, td { text-align:right; padding:6px 10px; border-bottom:1px solid var(--line); }
   th:first-child, td:first-child { text-align:left; }
   .axis { stroke: var(--line); } .tick { font-size:12px; fill: var(--muted); }
+  .ord { fill: var(--card); stroke: var(--line); }
+  .ordtxt { font-size:11px; text-anchor:middle; fill: var(--fg); }
+  .wave { fill: var(--c); fill-opacity:.35; }
   a { color: var(--a); }
 </style>
 </head>
@@ -78,7 +81,22 @@
     <p class="muted" style="font-size:14px">Reduction = 2 x BM x BN / (BM + BN). The real kernel uses 64 x 64 tiles, which gives <b id="real">64</b>x fewer reads. The same formula is checked by a test in the repo (<code>tests/test_tiling.py</code>).</p>
   </div>
 
-  <h2>2. What has been measured</h2>
+  <h2>2. In what order should tiles run?</h2>
+  <p>The GPU runs many programs at once, and they share a cache. If the programs running together work on a compact block of output tiles, they need fewer different pieces of A and B, so more reads hit the cache. Version 2 of the kernel launches tiles in groups to do this. The grid below numbers the tiles in launch order, and the shaded ones are the first 16 programs, imagined to run at the same time.</p>
+  <div class="card">
+    <div class="controls">
+      <label>Group size <select id="grp"><option>1</option><option>2</option><option selected>4</option><option>8</option></select></label>
+      <span class="muted" style="font-size:14px">Group 1 is the plain row-by-row order.</span>
+    </div>
+    <svg id="order" role="img" aria-label="Grid of output tiles numbered in launch order, with the first sixteen shaded"></svg>
+    <div class="stats">
+      <div class="stat">Row-bands of A plus column-bands of B needed by the shaded tiles<b id="need">0</b></div>
+      <div class="stat">Same number for the plain row-by-row order<b id="needbase">0</b></div>
+    </div>
+    <p class="muted" style="font-size:14px">Fewer is better. This illustrates the idea and the arithmetic (checked by tests in <code>tests/test_tiling.py</code>). Whether it speeds up the real kernel is measured on a GPU, not claimed here.</p>
+  </div>
+
+  <h2>3. What has been measured</h2>
   <p>First version of the kernel, 16-bit numbers, on a free Tesla T4 on Google Colab (2026-10-20). The answers match PyTorch, but the speed does not yet.</p>
   <div class="card">
     <svg id="chart" viewBox="0 0 720 340" role="img" aria-label="Line chart of throughput versus matrix size for torch.matmul and the first Triton kernel"></svg>
@@ -86,8 +104,8 @@
     <p class="muted" style="font-size:14px">The first kernel uses one fixed tile size and default launch settings, and it reaches about 4 percent of PyTorch's speed at 4096. Next is a sweep of tile sizes, warps and pipeline stages, one change at a time, with each result recorded in the repo.</p>
   </div>
 
-  <h2>3. What is next</h2>
-  <p>Tune the kernel and plot the climb from 4 percent toward PyTorch. Then train a simulated robot on a GPU simulator and compare simulation speed on the CPU and GPU. Everything here runs on a free shared GPU. <a href="https://colab.research.google.com/github/therealemmanueloppong/gpu-robot-lab/blob/main/notebooks/colab_quickstart.ipynb">Run it yourself in Colab</a>.</p>
+  <h2>4. What is next</h2>
+  <p>Version 2 of the kernel (automatic tuning plus the grouped launch order above) is written and waiting for its first GPU run. Then plot the climb from 4 percent toward PyTorch, and report what actually helped. Then train a simulated robot on a GPU simulator and compare simulation speed on the CPU and GPU. Everything here runs on a free shared GPU. <a href="https://colab.research.google.com/github/therealemmanueloppong/gpu-robot-lab/blob/main/notebooks/colab_quickstart.ipynb">Run it yourself in Colab</a>.</p>
 </main>
 
 <script>
@@ -185,6 +203,38 @@
   $('speed').oninput = function () { if (timer) { stop(); play(); } };
   $('real').textContent = (2 * 64 * 64 / (64 + 64)).toString();
   build();
+
+  /* launch order panel, same arithmetic as tiling.grouped_order and the v2 kernel */
+  function grouped(nm, nn, g) {
+    var out = [], per = g * nn;
+    for (var pid = 0; pid < nm * nn; pid++) {
+      var first = Math.floor(pid / per) * g, size = Math.min(nm - first, g);
+      out.push([first + (pid % per) % size, Math.floor((pid % per) / size)]);
+    }
+    return out;
+  }
+  function needed(list) {
+    var ms = {}, ns = {};
+    list.forEach(function (p) { ms[p[0]] = 1; ns[p[1]] = 1; });
+    return Object.keys(ms).length + Object.keys(ns).length;
+  }
+  function drawOrder() {
+    var G = 8, WAVE = 16, cs = 40, pad = 6, g = parseInt($('grp').value, 10);
+    var order = grouped(G, G, g), svg = $('order');
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    svg.setAttribute('viewBox', '0 0 ' + (G * cs + 2 * pad) + ' ' + (G * cs + 2 * pad));
+    svg.style.maxWidth = '360px'; svg.style.margin = '0 auto';
+    order.forEach(function (p, i) {
+      el('rect', { x: pad + p[1] * cs, y: pad + p[0] * cs, width: cs, height: cs, 'class': 'ord' }, svg);
+      if (i < WAVE) el('rect', { x: pad + p[1] * cs, y: pad + p[0] * cs, width: cs, height: cs, 'class': 'wave' }, svg);
+      var t = el('text', { x: pad + p[1] * cs + cs / 2, y: pad + p[0] * cs + cs / 2 + 4, 'class': 'ordtxt' }, svg);
+      t.textContent = i;
+    });
+    $('need').textContent = needed(order.slice(0, WAVE));
+    $('needbase').textContent = needed(grouped(G, G, 1).slice(0, WAVE));
+  }
+  $('grp').onchange = drawOrder;
+  drawOrder();
 
   /* measured data, from results/matmul_t4_2026-10-20.csv */
   var data = [

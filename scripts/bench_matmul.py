@@ -16,6 +16,7 @@ def main() -> int:
     import triton
 
     from gpu_robot_lab.kernels.matmul import matmul
+    from gpu_robot_lab.kernels.matmul_v2 import matmul_v2
 
     print(f"GPU: {torch.cuda.get_device_name(0)}")
     print(f"torch {torch.__version__}, triton {triton.__version__}, CUDA {torch.version.cuda}")
@@ -26,6 +27,8 @@ def main() -> int:
         flops = matmul_flops(size, size, size)
         torch_t = time_fn(lambda a=a, b=b: torch.matmul(a, b), sync=torch.cuda.synchronize)
         mine_t = time_fn(lambda a=a, b=b: matmul(a, b), sync=torch.cuda.synchronize)
+        matmul_v2(a, b)  # first call runs the autotuner, so keep it out of the timing
+        v2_t = time_fn(lambda a=a, b=b: matmul_v2(a, b), sync=torch.cuda.synchronize)
         row = {
             "size": size,
             "torch_ms": round(torch_t.median_ms, 4),
@@ -33,6 +36,9 @@ def main() -> int:
             "torch_gflops": round(gflops(flops, torch_t.median_ms), 1),
             "triton_gflops": round(gflops(flops, mine_t.median_ms), 1),
             "triton_vs_torch": round(speedup(torch_t.median_ms, mine_t.median_ms), 3),
+            "v2_ms": round(v2_t.median_ms, 4),
+            "v2_gflops": round(gflops(flops, v2_t.median_ms), 1),
+            "v2_vs_torch": round(speedup(torch_t.median_ms, v2_t.median_ms), 3),
         }
         rows.append(row)
         print(row)

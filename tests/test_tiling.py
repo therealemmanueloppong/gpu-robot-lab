@@ -40,3 +40,30 @@ def test_bad_inputs_are_rejected():
         tiled_matmul(np.zeros((2, 3)), np.zeros((4, 2)))
     with pytest.raises(ValueError):
         tiled_matmul(np.zeros((2, 2)), np.zeros((2, 2)), 0, 4, 4)
+
+
+from gpu_robot_lab.tiling import grouped_order, row_major_order, tiles_needed
+
+
+@pytest.mark.parametrize("shape", [(1, 1), (8, 8), (7, 5), (5, 7), (13, 3), (64, 64)])
+@pytest.mark.parametrize("group_m", [1, 2, 4, 8, 100])
+def test_grouped_order_visits_every_tile_exactly_once(shape, group_m):
+    order = grouped_order(*shape, group_m)
+    assert len(order) == shape[0] * shape[1]
+    assert set(order) == set(row_major_order(*shape))
+
+
+def test_group_of_one_is_the_plain_row_major_order():
+    assert grouped_order(6, 5, 1) == row_major_order(6, 5)
+
+
+def test_a_square_group_needs_fewer_loaded_bands_than_row_major():
+    wave = 16  # programs imagined to run at the same time
+    row = tiles_needed(row_major_order(8, 8)[:wave])
+    grouped = tiles_needed(grouped_order(8, 8, 4)[:wave])
+    assert (row, grouped) == (10, 8)
+
+
+def test_group_size_must_be_positive():
+    with pytest.raises(ValueError):
+        grouped_order(4, 4, 0)

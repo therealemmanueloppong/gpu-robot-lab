@@ -68,3 +68,30 @@ def traffic_reduction(block_m: int, block_n: int) -> float:
     so the saving is 2 * BM * BN / (BM + BN).
     """
     return 2 * block_m * block_n / (block_m + block_n)
+
+
+def row_major_order(num_pid_m: int, num_pid_n: int) -> list[tuple[int, int]]:
+    """The simple launch order: finish a whole row of output tiles, then the next row."""
+    return [(i, j) for i in range(num_pid_m) for j in range(num_pid_n)]
+
+
+def grouped_order(num_pid_m: int, num_pid_n: int, group_m: int) -> list[tuple[int, int]]:
+    """The launch order used by matmul_v2: walk down groups of ``group_m`` rows of tiles.
+
+    This is the same arithmetic the kernel does with its program id. Programs that run at the
+    same time then work on a compact block of output tiles and share loaded data in cache.
+    """
+    if group_m < 1:
+        raise ValueError("group_m must be positive")
+    order = []
+    per_group = group_m * num_pid_n
+    for pid in range(num_pid_m * num_pid_n):
+        first_m = (pid // per_group) * group_m
+        size_m = min(num_pid_m - first_m, group_m)
+        order.append((first_m + (pid % per_group) % size_m, (pid % per_group) // size_m))
+    return order
+
+
+def tiles_needed(order: list[tuple[int, int]]) -> int:
+    """How many different row-bands of A plus column-bands of B a set of programs must load."""
+    return len({m for m, _ in order}) + len({n for _, n in order})

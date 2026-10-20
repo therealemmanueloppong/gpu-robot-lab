@@ -12,12 +12,13 @@ See [docs/PLAN.md](docs/PLAN.md) for the stages, the rules for what can be claim
 
 - **[Interactive explainer (live page)](https://therealemmanueloppong.github.io/gpu-robot-lab/)**: animates how the tiled kernel loads tiles and why it reads about 64 times less memory than a naive multiply, and shows the measured results. The source is `docs/index.html`.
 - **Results chart**: below, from real runs on a Colab T4.
+- **v2 kernel**: autotuning plus grouped launch order. `scripts/check_kernels.py` and `scripts/bench_matmul.py` now check and time v1, v2 and `torch.matmul` together, so one Colab run produces the comparison.
 - **Tuning study**: `scripts/tune_matmul.py` sweeps tile sizes, warps and pipeline stages. Its chart goes here once it has been run.
 
 ## What is in the repo
 
-- `src/gpu_robot_lab/kernels/` a tiled matrix multiply and a row-wise softmax in Triton
-- `src/gpu_robot_lab/tiling.py` a CPU model of the kernel's tiling and edge handling, tested in CI, with the memory-traffic formula
+- `src/gpu_robot_lab/kernels/` a tiled matrix multiply (`matmul.py`, v1), an autotuned v2 with a cache-friendly launch order (`matmul_v2.py`, **written but not yet run on a GPU**), and a row-wise softmax, all in Triton
+- `src/gpu_robot_lab/tiling.py` a CPU model of the kernel's tiling, edge handling and launch order, tested in CI, with the memory-traffic formula
 - `src/gpu_robot_lab/bench.py` timing that works correctly for asynchronous GPU code, plus GFLOPS and speedup helpers
 - `src/gpu_robot_lab/reference.py` and `checks.py` the CPU ground truth and error checking
 - `scripts/check_kernels.py` checks every kernel against PyTorch
