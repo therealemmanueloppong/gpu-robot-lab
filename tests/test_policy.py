@@ -69,3 +69,17 @@ def test_replay_in_plain_mujoco_returns_angles_and_commands(model):
 def test_success_needs_the_pole_to_stay_near_the_top():
     assert policy.success(np.full(200, np.pi))
     assert not policy.success(np.zeros(200))
+
+
+def test_curriculum_starts_grow_from_the_top_and_keep_the_easy_ones():
+    easy = policy.curriculum_starts(0.3)
+    hard = policy.curriculum_starts(float(np.pi))
+    assert set(np.round(easy, 6)) <= set(np.round(hard, 6))
+    assert len(hard) > len(easy)
+    assert all(abs(a - np.pi) <= 0.3 + 1e-6 for a in easy)
+    assert min(hard) <= 1e-6  # the hardest stage includes starting at the very bottom (angle 0)
+
+
+def test_curriculum_training_returns_the_history_of_every_stage(model):
+    result = policy.train_curriculum(model, population=32, iterations_per_stage=2, seed=0)
+    assert len(result.mean_fitness) == 2 * len(policy.CURRICULUM_OFFSETS)

@@ -133,8 +133,16 @@
     <p class="muted" style="font-size:14px">For a single robot the GPU is about 50 times slower than the CPU. It pulls ahead at around a hundred robots and reaches 129 times at 16,384, which is why GPUs matter when learning needs thousands of simulated robots. Limits: a pendulum is very cheap to simulate, the CPU baseline is one thread, and these come from one run.</p>
   </div>
 
-  <h2>5. What is next</h2>
-  <p>Find out which part of v2 helps (the tile settings or the grouped launch order) by changing one at a time, repeat the measurements to see how much they vary, and close more of the gap to PyTorch. Repeat the robot measurements, try a robot with contacts, and see whether the planner itself runs faster on a GPU at the same batch size. Everything here runs on a free shared GPU. <a href="https://colab.research.google.com/github/therealemmanueloppong/gpu-robot-lab/blob/main/notebooks/colab_quickstart.ipynb">Run it yourself in Colab</a>.</p>
+  <h2>5. A controller that learned</h2>
+  <p>The swing-up above is a fixed plan. A better controller reacts to what it sees. Here a small neural network reads the pole's angle and speed and outputs the motor command. It was trained by trying thousands of slightly different networks at once in the simulator and keeping the ones that did best (evolution strategies).</p>
+  <div class="card" style="text-align:center">
+    <img src="policy_swingup_cpu_preview.gif" alt="A pole swinging up and held upright by a learned controller" width="288" height="288" style="max-width:100%;height:auto">
+    <img src="policy_curve_cpu_preview.png" alt="Learning curve with dotted lines where each training stage begins" style="max-width:100%;height:auto;margin-top:8px">
+    <p class="muted" style="font-size:14px;text-align:left">Trained on a laptop CPU in 130 seconds. Replayed in plain MuJoCo from five starting angles, including hanging straight down, it swung the pole up and held it at the top every time. Two earlier versions failed: one learned to swing up but kept spinning past the top, another learned to balance and then forgot. A five-stage curriculum, from nearly upright to hanging down, fixed it. This is a CPU run on one pendulum with one random seed, and has not been run on a GPU.</p>
+  </div>
+
+  <h2>6. What is next</h2>
+  <p>Find out which part of v2 helps (the tile settings or the grouped launch order) by changing one at a time, repeat the measurements to see how much they vary, and close more of the gap to PyTorch. Run the full experiment notebook on a GPU: which part of v2 helps, how much results vary, whether the kernel uses the tensor cores, whether the planner is faster on a GPU, speed with collisions, and the policy trained at a larger scale. Everything here runs on a free shared GPU. <a href="https://colab.research.google.com/github/therealemmanueloppong/gpu-robot-lab/blob/main/notebooks/colab_quickstart.ipynb">Run it yourself in Colab</a>.</p>
 </main>
 
 <script>

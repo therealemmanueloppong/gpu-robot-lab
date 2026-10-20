@@ -8,7 +8,7 @@
 
 GPU kernels written from scratch and benchmarked against PyTorch, then used to speed up a simulated robot. Built to run on a free shared GPU, so it costs nothing.
 
-Status: early but measured. The Triton matmul and softmax kernels are **correct** (checked against PyTorch on a Colab T4). The first matmul reached about 4% of `torch.matmul`. A sweep of 135 settings and a compiler check found that it was **spilling registers**, and tuned versions run about **3.4 times faster** (v2: 11 to 17% of PyTorch at large sizes). The remaining gap to PyTorch is open work. Stage 2 (a simulated robot planned with thousands of parallel simulations) works on the GPU too: with 16,384 robots at once, MJX on a T4 simulated about 129 times more steps per second than one CPU thread. Measurements are below.
+Status: early but measured. The Triton matmul and softmax kernels are **correct** (checked against PyTorch on a Colab T4). The first matmul reached about 4% of `torch.matmul`. A sweep of 135 settings and a compiler check found that it was **spilling registers**, and tuned versions run about **3.4 times faster** (v2: 11 to 17% of PyTorch at large sizes). The remaining gap to PyTorch is open work. Stage 2 (a simulated robot planned with thousands of parallel simulations) works on the GPU too: with 16,384 robots at once, MJX on a T4 simulated about 129 times more steps per second than one CPU thread. A neural-network controller trained on a CPU also learns to swing the pole up and hold it (5 of 5 replays). More GPU experiments are written and waiting for a Colab run. Measurements are below.
 
 See [docs/PLAN.md](docs/PLAN.md) for the stages, the rules for what can be claimed, and the risks.
 
@@ -19,6 +19,10 @@ See [docs/PLAN.md](docs/PLAN.md) for the stages, the rules for what can be claim
 - **Robot simulation (stage 2)**: a pendulum whose motor is too weak to lift it directly. Thousands of candidate motor plans are simulated at once (MuJoCo MJX), the best are kept, and the swing-up is replayed in a separate CPU simulator as a check. Preview below, run on a laptop CPU (the GPU run gave the same result, see the results):
 
   ![Pendulum swinging up to the top](results/cpu_preview/swingup.gif)
+
+- **A learned controller**: a small neural network that reads the pole's angle and speed and outputs the motor command, trained by evolution strategies on parallel simulations and replayed in plain MuJoCo. CPU preview (from a start near the bottom):
+
+  ![A learned policy swinging the pole up and holding it](results/policy_cpu_preview/policy_swingup.gif)
 
 - **v2 kernel**: autotuning plus grouped launch order. `scripts/check_kernels.py` and `scripts/bench_matmul.py` now check and time v1, v2 and `torch.matmul` together, so one Colab run produces the comparison.
 - **Tuning study and diagnosis**: `scripts/tune_matmul.py` sweeps tile sizes, warps and pipeline stages, and `scripts/inspect_kernel.py` prints register use and spills. Results below.
@@ -139,9 +143,24 @@ The GIF at the top of this README is from the laptop CPU preview. The GIF from t
 
 Earlier CPU preview (laptop, 1,024 plans per iteration, 2.8 seconds, replay ended 0.498 m up): [results/cpu_preview/swingup.json](results/cpu_preview/swingup.json). Tests also check that the MJX simulator and plain MuJoCo agree to within 0.0001 radians over 200 steps, and that the motor alone cannot lift the pole.
 
+### 5. A learned policy (CPU preview)
+
+Trained on a laptop CPU (`python scripts/train_policy.py --population 512 --iterations 30`, 130 seconds, 5 curriculum stages of 30 iterations; [results/policy_cpu_preview/policy.json](results/policy_cpu_preview/policy.json)).
+
+![Learning curve of the policy](results/policy_cpu_preview/policy_curve.png)
+
+After training, the network was replayed in plain MuJoCo using a separate NumPy implementation of the network, from five starting angles (-0.5, -0.2, 0.0, +0.2 and +0.5 radians from hanging straight down). **All 5 swung the pole up and held it at the top for the last second** (mean tip height 0.500 m; the top is 0.5 m). The dips in the curve are where each curriculum stage starts with harder starting angles.
+
+How it got there, including what failed:
+1. A first version trained from random starts learned to swing up but never learned to hold the pole there. It spun past the top again and again (in replays the pole reached the top, but the mean height over the last second was only about 0.01 to 0.06 m), even after a longer run with 2,048 candidates and extra starting positions near the top.
+2. A two-stage version (balance first, then swing up) learned to balance but forgot it when swing-up training began, and settled hanging at the bottom.
+3. A five-stage curriculum fixed it: start with the pole nearly upright, then allow larger and larger leans, ending with a start from the bottom, and keep the easier starts in every stage so skills are not forgotten.
+
+Limits: this is a CPU run, a single seed, and a single pendulum. It has not been run on a GPU, and the replay starting angles are close to the training ones (the bottom start was trained on). The policy is trained by evolution strategies, not an algorithm like PPO.
+
 ### Experiments written and CPU-tested, waiting for a GPU run
 
-Everything below has code, tests that run on a CPU, and a cell in `notebooks/all_experiments_colab.ipynb`. None of it has GPU results yet, so no numbers are claimed.
+Everything below has code, tests that run on a CPU, and a cell in `notebooks/all_experiments_colab.ipynb`. None of it has GPU results yet, so no GPU numbers are claimed.
 
 | Open question | Script | What it will show |
 |---|---|---|
@@ -151,9 +170,10 @@ Everything below has code, tests that run on a CPU, and a cell in `notebooks/all
 | Is the planner itself faster on a GPU | `bench_planner.py` | Seconds per iteration on CPU and GPU at the same batch size, compile excluded |
 | Robot with contacts | `bench_sim.py --model box` | Simulation speed with collisions and friction (a box dropped on the floor; not a walking robot) |
 | Stage 2 numbers repeated | `bench_sim.py` | Median and range over 5 repeats |
-| A learned policy | `train_policy.py` | A neural network trained by evolution strategies, replayed in plain MuJoCo from unseen starting angles |
+| A learned policy on a GPU | `train_policy.py` | The same training with 4,096 candidates per iteration (a CPU preview is done, see section 5) |
 
 ### Not done at all
 
 - A walking robot, and learning on a robot with many joints.
 - Reinforcement-learning algorithms such as PPO (the policy here is trained by evolution strategies).
+- Testing the policy on starting angles outside the training range, or with disturbances.

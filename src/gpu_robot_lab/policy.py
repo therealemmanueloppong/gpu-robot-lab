@@ -54,6 +54,10 @@ def init_params(rng: np.random.Generator) -> np.ndarray:
 TRAIN_STARTS = (-0.3, -0.1, 0.1, 0.3, float(np.pi - 0.25), float(np.pi + 0.25))
 
 
+# Stage 1 of the curriculum: only starts close to the top, so the policy first learns to hold the pole there.
+BALANCE_STARTS = (float(np.pi - 0.3), float(np.pi - 0.1), float(np.pi + 0.1), float(np.pi + 0.3))
+
+
 def make_evaluator(model, horizon: int = 400, starts=TRAIN_STARTS):
     """Return a jitted function mapping a batch of parameter vectors to a fitness for each."""
     import jax
@@ -103,6 +107,8 @@ def train_es(
     learning_rate: float = 0.05,
     horizon: int = 400,
     seed: int = 0,
+    starts=TRAIN_STARTS,
+    init=None,
 ) -> PolicyResult:
     """Evolution strategies with mirrored sampling and an Adam update."""
     import jax.numpy as jnp
@@ -110,9 +116,9 @@ def train_es(
     if population % 2:
         raise ValueError("population must be even")
     model = model or make_model()
-    evaluate = make_evaluator(model, horizon)
+    evaluate = make_evaluator(model, horizon, starts)
     rng = np.random.default_rng(seed)
-    params = init_params(rng)
+    params = init_params(rng) if init is None else np.asarray(init, dtype=np.float32).copy()
     m, v = np.zeros_like(params), np.zeros_like(params)
     mean_fit, best_fit = [], []
     for t in range(1, iterations + 1):
@@ -128,6 +134,38 @@ def train_es(
         v = 0.999 * v + 0.001 * grad**2
         params = params + learning_rate * (m / (1 - 0.9**t)) / (np.sqrt(v / (1 - 0.999**t)) + 1e-8)
     return PolicyResult(params.astype(np.float32), mean_fit, best_fit)
+
+
+# Curriculum: how far from the top the pole may start, in radians. 0.3 is nearly upright, 3.14 is hanging down.
+CURRICULUM_OFFSETS = (0.3, 1.0, 1.8, 2.5, float(np.pi))
+
+
+def curriculum_starts(max_offset: float) -> tuple[float, ...]:
+    """Starting angles up to ``max_offset`` away from the top, on both sides (keeps all easier starts too)."""
+    offsets = [o for o in (0.1, 0.3, 0.6, 1.0, 1.4, 1.8, 2.2, 2.5, 2.9, float(np.pi)) if o <= max_offset + 1e-6]
+    return tuple(float(np.pi - o) for o in offsets) + tuple(float(np.pi + o) for o in offsets if o < np.pi - 1e-6)
+
+
+def train_curriculum(
+    model=None,
+    population: int = 1024,
+    iterations_per_stage: int = 40,
+    seed: int = 0,
+    offsets=CURRICULUM_OFFSETS,
+) -> PolicyResult:
+    """Learn to balance first, then to recover from larger and larger leans, ending with a swing-up from the bottom.
+
+    Every stage keeps the easier starting angles, so earlier skills are not forgotten. The returned
+    history covers all stages in order.
+    """
+    model = model or make_model()
+    params, mean_fit, best_fit = None, [], []
+    for stage, offset in enumerate(offsets):
+        r = train_es(model, population, iterations_per_stage, seed=seed + stage, starts=curriculum_starts(offset), init=params)
+        params = r.params
+        mean_fit += r.mean_fitness
+        best_fit += r.best_fitness
+    return PolicyResult(params, mean_fit, best_fit)
 
 
 def rollout_policy_cpu(model, params: np.ndarray, start_angle: float = 0.1, steps: int = 400):

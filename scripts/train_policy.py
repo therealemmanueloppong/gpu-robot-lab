@@ -1,6 +1,9 @@
 """Train a neural-network policy for the pendulum by evolution strategies, then replay and animate it.
 
-Run on a GPU runtime for the big population:  python scripts/train_policy.py --population 4096 --iterations 150
+Training uses a curriculum: balance near the top first, then recover from bigger and bigger leans, ending
+with a swing-up from the bottom. ``--iterations`` is per stage (5 stages).
+
+Run on a GPU runtime for the big population:  python scripts/train_policy.py --population 4096 --iterations 40
 Writes results/policy/policy.json, policy_curve.png, policy_swingup.gif and policy_params.npy.
 """
 from __future__ import annotations
@@ -17,7 +20,7 @@ import numpy as np
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--population", type=int, default=2048)
-    parser.add_argument("--iterations", type=int, default=150)
+    parser.add_argument("--iterations", type=int, default=40, help="iterations per curriculum stage")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out", type=Path, default=Path("results/policy"))
     args = parser.parse_args()
@@ -31,11 +34,11 @@ def main() -> int:
     model = sim.make_model()
 
     start = time.perf_counter()
-    result = policy.train_es(model, population=args.population, iterations=args.iterations, seed=args.seed)
+    result = policy.train_curriculum(model, population=args.population, iterations_per_stage=args.iterations, seed=args.seed)
+    total = len(result.mean_fitness)
     seconds = time.perf_counter() - start
-    print(f"Training took {seconds:.1f} s ({args.population} candidates x {args.iterations} iterations)")
-    step = max(1, args.iterations // 10)
-    for i in range(0, args.iterations, step):
+    print(f"Training took {seconds:.1f} s ({args.population} candidates x {total} iterations in {len(policy.CURRICULUM_OFFSETS)} stages)")
+    for i in range(args.iterations - 1, total, args.iterations):
         print(f"  iteration {i + 1:>4}: average fitness {result.mean_fitness[i]:+.2f}, best {result.best_fitness[i]:+.2f}")
 
     # Replay in plain MuJoCo with a plain NumPy network, from starting angles the policy was not trained on.
@@ -54,10 +57,10 @@ def main() -> int:
     gif_angles, _ = policy.rollout_policy_cpu(model, result.params, 0.2, steps=500)
     viz.animate_pendulum(gif_angles, args.out / "policy_swingup.gif", dt=sim.DT,
                          title=f"Learned policy ({args.population} candidates, {device.platform})")
-    viz.plot_training(result.mean_fitness, result.best_fitness, args.out / "policy_curve.png")
+    viz.plot_training(result.mean_fitness, result.best_fitness, args.out / "policy_curve.png", stage_length=args.iterations)
     (args.out / "policy.json").write_text(json.dumps({
         "device": f"{device.platform} ({device.device_kind})", "population": args.population,
-        "iterations": args.iterations, "seed": args.seed, "training_seconds": round(seconds, 1),
+        "iterations_per_stage": args.iterations, "stages": len(policy.CURRICULUM_OFFSETS), "seed": args.seed, "training_seconds": round(seconds, 1),
         "replays": tests, "replays_successful": n_ok, "replays_total": len(tests),
         "mean_fitness": [round(x, 3) for x in result.mean_fitness],
         "best_fitness": [round(x, 3) for x in result.best_fitness],

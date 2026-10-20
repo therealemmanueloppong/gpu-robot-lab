@@ -72,8 +72,10 @@ def plot_scores(best_scores: list[float], final_heights: list[float], path: str 
     return out
 
 
-def plot_training(mean_fitness: list[float], best_fitness: list[float], path: str | Path) -> Path:
-    """Learning curve of the evolution-strategies policy."""
+def plot_training(
+    mean_fitness: list[float], best_fitness: list[float], path: str | Path, stage_length: int | None = None
+) -> Path:
+    """Learning curve of the evolution-strategies policy. ``stage_length`` marks where each curriculum stage starts."""
     import matplotlib
 
     matplotlib.use("Agg")
@@ -83,11 +85,15 @@ def plot_training(mean_fitness: list[float], best_fitness: list[float], path: st
     x = np.arange(1, len(mean_fitness) + 1)
     ax.plot(x, best_fitness, color="#2e9e6b", label="best candidate in the generation")
     ax.plot(x, mean_fitness, color="#2a7ae2", label="average candidate")
-    ax.set_xlabel("Training iteration")
+    if stage_length:
+        for i, boundary in enumerate(range(stage_length, len(mean_fitness), stage_length), start=2):
+            ax.axvline(boundary + 0.5, color="gray", linestyle=":", linewidth=1)
+            ax.text(boundary + 1.5, ax.get_ylim()[0] + 0.05, f"stage {i}", fontsize=7, color="gray")
+    ax.set_xlabel("Training iteration (dotted lines: a harder set of starting angles begins)")
     ax.set_ylabel("Fitness (higher is better)")
     ax.set_title("A neural-network policy learns to swing up")
     ax.grid(alpha=0.3)
-    ax.legend(loc="lower right", fontsize=8)
+    ax.legend(loc="center right", fontsize=8)
     fig.tight_layout()
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
