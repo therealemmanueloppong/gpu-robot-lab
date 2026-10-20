@@ -2,7 +2,7 @@
 
 GPU kernels written from scratch and benchmarked against PyTorch, then used to speed up a simulated robot. Built to run on a free shared GPU, so it costs nothing.
 
-Status: early scaffold. The testing and benchmarking tools are tested on a CPU. **The Triton kernels have not yet been run on a GPU and no performance numbers exist yet.** The first job is to run them on Colab and record real results here.
+Status: early. The Triton matmul and softmax kernels are **correct** (checked against PyTorch on a Colab T4) but the first matmul is **far slower than `torch.matmul`**. Tuning it is stage 1, step 3. Measurements are below.
 
 See [docs/PLAN.md](docs/PLAN.md) for the stages, the rules for what can be claimed, and the risks.
 
@@ -35,4 +35,18 @@ Kaggle notebooks also offer a free GPU and work the same way. Free-tier limits c
 
 ## Results
 
-None yet. This section will list each measurement with the GPU, the date and the command that produced it.
+### Matrix multiply, first version (untuned), float16
+
+Measured on a Tesla T4 on Google Colab, 2026-10-20, with `python scripts/bench_matmul.py` (median of 50 runs after 10 warm-up runs). The package versions were not printed on this run, so the script now prints them. Raw data: [results/matmul_t4_2026-10-20.csv](results/matmul_t4_2026-10-20.csv).
+
+| Size | torch.matmul (GFLOPS) | Triton v1 (GFLOPS) | Triton speed vs torch |
+|---|---|---|---|
+| 256 | 790 | 267 | 0.34x |
+| 512 | 4,784 | 753 | 0.16x |
+| 1024 | 12,870 | 983 | 0.08x |
+| 2048 | 17,606 | 939 | 0.05x |
+| 4096 | 22,456 | 920 | 0.04x |
+
+Correctness: `scripts/check_kernels.py` passed for all 4 matmul shapes (largest error 0.0625 in float16) and all 3 softmax shapes.
+
+What this says: the kernel gives the right answers, but at large sizes it reaches only about 4% of PyTorch's speed, so its work is not using the GPU well yet. The first version uses one fixed tile size and the default launch settings. Next: try larger tiles, more warps and pipeline stages, measure each change on its own, and record what helps.

@@ -13,10 +13,12 @@ def main() -> int:
         print("No CUDA GPU with torch and triton found.")
         return 2
     import torch
+    import triton
 
     from gpu_robot_lab.kernels.matmul import matmul
 
     print(f"GPU: {torch.cuda.get_device_name(0)}")
+    print(f"torch {torch.__version__}, triton {triton.__version__}, CUDA {torch.version.cuda}")
     rows = []
     for size in [256, 512, 1024, 2048, 4096]:
         a = torch.randn((size, size), device="cuda", dtype=torch.float16)
